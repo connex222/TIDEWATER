@@ -1,0 +1,180 @@
+'use strict';
+const http=require('node:http');
+const fs=require('node:fs');
+const path=require('node:path');
+const crypto=require('node:crypto');
+const WebSocket=require('ws');
+const {CAPTAINS,MODES,randomInt}=require('./src/constants');
+const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements}=require('./src/engine');
+const {qrSvg}=require('./src/qr');
+const PORT=Number(process.env.PORT)||3000;
+const PUBLIC=path.resolve(__dirname,'public');
+const rooms=new Map();
+const codeChars='ABCDEFGHJKLMNPQRSTUVWXYZ';
+const makeToken=()=>crypto.randomBytes(24).toString('base64url');
+const makeId=()=>crypto.randomUUID();
+function makeCode(){let value;do{value=Array.from({length:4},()=>codeChars[randomInt(codeChars.length)]).join('');}while(rooms.has(value));return value;}
+function send(ws,message){if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(message));}
+function error(ws,message){send(ws,{type:'error',message});}
+function roomPublic(room){return {
+  code:room.code,mode:room.mode,phase:room.game?.phase||'lobby',
+  captains:CAPTAINS,players:room.players.map(({id,name,avatarId,ready,connected,bot,renown})=>({id,name,avatarId,ready,connected,bot,renown:renown||0})),
+  game:publicGame(room.game)
+};}
+function publish(room){
+  const data=roomPublic(room);
+  send(room.host,{type:'state',room:data,host:true});
+  for(const p of room.players){
+    send(p.ws,{type:'state',room:data,self:{id:p.id,avatarId:p.avatarId,goods:p.goods||null,gold:p.gold??null,renown:p.renown??0}});
+  }
+}
+function record(room,text){if(room.game){room.game.history.push(text);room.game.history=room.game.history.slice(-30);}}
+function availableAvatar(room,requested,exceptId=null){return CAPTAINS.some(c=>c.id===requested)&&!room.players.some(p=>p.id!==exceptId&&p.avatarId===requested);}
+function initialRoom(ws){const room={code:makeCode(),token:makeToken(),host:ws,mode:'standard',players:[],game:null,createdAt:Date.now()};rooms.set(room.code,room);return room;}
+function safeName(raw){const text=typeof raw==='string'?raw.trim().replace(/[\u0000-\u001F\u007F<>]/g,''):'';return text.length>=2&&text.length<=24?text:null;}
+function detach(ws){
+  if(!ws.roomCode)return;
+  const room=rooms.get(ws.roomCode);if(!room)return;
+  if(ws.kind==='host'&&room.host===ws)room.host=null;
+  if(ws.kind==='player'){
+    const p=room.players.find(p=>p.id===ws.playerId);
+    if(p&&p.ws===ws){p.ws=null;p.connected=false;p.ready=false;}
+  }
+  publish(room);
+}
+function bind(ws,room,kind,playerId){
+  if(ws.roomCode)detach(ws);
+  ws.roomCode=room.code;ws.kind=kind;ws.playerId=playerId||null;
+}
+function join(ws,msg){
+  if(ws.roomCode)return error(ws,'This device is already attached to a room.');
+  const room=rooms.get(String(msg.room||'').toUpperCase());
+  if(!room)return error(ws,'Room not found. Check the four-letter code.');
+  if(room.game)return error(ws,'This voyage has already departed. Rejoin with your saved captain instead.');
+  if(room.players.length>=8)return error(ws,'This room already has eight captains.');
+  const name=safeName(msg.name);if(!name)return error(ws,'Enter a captain name of 2–24 characters.');
+  const avatar=String(msg.avatarId||'');if(!availableAvatar(room,avatar))return error(ws,'That captain has already been claimed. Choose another.');
+  const p={id:makeId(),token:makeToken(),name,avatarId:avatar,ready:false,connected:true,bot:false,ws,renown:0};
+  room.players.push(p);bind(ws,room,'player',p.id);
+  send(ws,{type:'joined',room:room.code,playerId:p.id,token:p.token});publish(room);
+}
+function rejoin(ws,msg){
+  if(ws.roomCode)return error(ws,'This device is already attached to a room.');
+  const room=rooms.get(String(msg.room||'').toUpperCase());
+  if(!room)return error(ws,'Room not found. Ask the host for a fresh room code.');
+  const player=room.players.find(p=>p.id===msg.playerId&&p.token===msg.token&&!p.bot);
+  if(!player)return error(ws,'Saved captain credentials were not recognised.');
+  const prior=player.ws;player.ws=ws;player.connected=true;bind(ws,room,'player',player.id);
+  send(ws,{type:'joined',room:room.code,playerId:player.id,token:player.token});publish(room);
+  if(prior&&prior!==ws)prior.close(4000,'Captain rejoined elsewhere');
+}
+function replaceWithBot(room,p){p.bot=true;p.ws=null;p.connected=true;p.ready=true;p.token=null;p.name=`${p.name} (AI)`;}
+function runBotPlacement(room){
+  let safety=18;
+  while(room.game?.phase==='placement'&&safety--){
+    const player=room.players.find(p=>p.id===currentPlacer(room.game));
+    if(!player?.bot)break;
+    const choices=legalPlacements(room.game);
+    if(!choices.length)break;
+    placeSettlement(room.game,room.players,player.id,choices[randomInt(choices.length)]);
+  }
+}
+function processAction(ws,msg){
+  if(!msg||typeof msg!=='object'||Array.isArray(msg)||typeof msg.type!=='string')return error(ws,'Malformed request.');
+  if(msg.type==='create_room'){
+    if(ws.roomCode)return error(ws,'Already attached to a room.');
+    let room;
+    if(msg.room&&msg.token){room=rooms.get(String(msg.room).toUpperCase());
+      if(!room||room.token!==msg.token)return error(ws,'Could not recover the host session.');
+      if(room.host&&room.host!==ws)room.host.close(4001,'Host reconnected');room.host=ws;
+    }else room=initialRoom(ws);
+    bind(ws,room,'host');send(ws,{type:'room_created',code:room.code,token:room.token});publish(room);return;
+  }
+  if(msg.type==='preview'){
+    const room=rooms.get(String(msg.room||'').toUpperCase());
+    return send(ws,{type:'preview',code:room?.code||null,available:room&&!room.game?CAPTAINS.filter(c=>availableAvatar(room,c.id)).map(c=>c.id):[],occupied:room?room.players.map(p=>p.avatarId):[],phase:room?.game?.phase||'lobby'});
+  }
+  if(msg.type==='join')return join(ws,msg);
+  if(msg.type==='rejoin')return rejoin(ws,msg);
+  const room=rooms.get(ws.roomCode||'');if(!room)return error(ws,'Join a room first.');
+  if(msg.type==='set_mode'){
+    if(ws.kind!=='host'||room.game)return error(ws,'Only the host can select a mode in the lobby.');
+    if(!MODES[msg.mode])return error(ws,'Unknown mode.');room.mode=msg.mode;publish(room);return;
+  }
+  if(msg.type==='ready'){
+    if(ws.kind!=='player'||room.game)return error(ws,'Ready status can only change in the lobby.');
+    const p=room.players.find(p=>p.id===ws.playerId);if(!p||p.bot)return error(ws,'Captain not found.');
+    p.ready=!!msg.ready;publish(room);return;
+  }
+  if(msg.type==='choose_avatar'){
+    if(ws.kind!=='player'||room.game)return error(ws,'You can only select a captain before departure.');
+    const p=room.players.find(p=>p.id===ws.playerId);if(!p)return error(ws,'Captain not found.');
+    if(!availableAvatar(room,msg.avatarId,p.id))return error(ws,'Captain is unavailable.');
+    p.avatarId=msg.avatarId;p.ready=false;publish(room);return;
+  }
+  if(msg.type==='kick'){
+    if(ws.kind!=='host'||room.game)return error(ws,'Only the host can remove captains before departure.');
+    const p=room.players.find(p=>p.id===msg.playerId);if(!p)return error(ws,'Captain not found.');
+    room.players=room.players.filter(other=>other!==p);if(p.ws){send(p.ws,{type:'kicked'});p.ws.roomCode=null;p.ws.close(4002,'Removed by host');}publish(room);return;
+  }
+  if(msg.type==='replace_bot'){
+    if(ws.kind!=='host')return error(ws,'Only the host may activate AI captains.');
+    const p=room.players.find(p=>p.id===msg.playerId);if(!p)return error(ws,'Captain not found.');
+    if(p.connected&&!p.bot)return error(ws,'Only disconnected captains may be replaced by AI.');
+    replaceWithBot(room,p);record(room,`${p.name} has taken the helm.`);runBotPlacement(room);publish(room);return;
+  }
+  if(msg.type==='add_bot'){
+    if(ws.kind!=='host'||room.game)return error(ws,'AI captains may only be added in the lobby.');
+    if(room.players.length>=8)return error(ws,'Maximum of eight captains.');
+    const free=CAPTAINS.filter(c=>availableAvatar(room,c.id));if(!free.length)return error(ws,'No captain is available.');
+    const avatar=free[randomInt(free.length)];room.players.push({id:makeId(),token:null,name:`${avatar.title} (AI)`,avatarId:avatar.id,ready:true,connected:true,bot:true,ws:null,renown:0});publish(room);return;
+  }
+  if(msg.type==='start'){
+    if(ws.kind!=='host'||room.game)return error(ws,'Only the host can launch a new game.');
+    if(room.players.length<2)return error(ws,'At least two captains must join.');
+    if(room.players.some(p=>!p.ready||!p.connected))return error(ws,'All captains must be present and ready.');
+    room.game=newGame(room.players,room.mode);runBotPlacement(room);publish(room);return;
+  }
+  if(msg.type==='place'){
+    if(ws.kind!=='player'||!room.game)return error(ws,'There is no active placement turn.');
+    const result=placeSettlement(room.game,room.players,ws.playerId,msg.tileId);
+    if(!result.ok)return error(ws,result.error);runBotPlacement(room);publish(room);return;
+  }
+  return error(ws,'Unknown action or not available during Phase 1.');
+}
+const ROUTES=new Map([['/','tv.html'],['/tv.html','tv.html'],['/phone.html','phone.html']]);
+const server=http.createServer((req,res)=>{
+  try{
+    const url=new URL(req.url,'http://localhost');
+    if(url.pathname==='/health'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({status:'ok',app:'Tidewater',rooms:rooms.size}));return;}
+    if(url.pathname==='/qr.svg'){
+      const code=(url.searchParams.get('room')||'').toUpperCase();if(!/^[A-Z]{4}$/.test(code)||!rooms.has(code)){res.writeHead(404);res.end();return;}
+      let host=req.headers['x-forwarded-host']||req.headers.host||'';
+      if(typeof host!=='string'||!/^[a-z\d.\-:\[\]]{1,120}$/i.test(host)){res.writeHead(400);res.end();return;}
+      const protocol=req.headers['x-forwarded-proto']==='https'?'https':req.socket.encrypted?'https':'http';
+      const joinUrl=`${protocol}://${host}/phone.html?room=${code}`;
+      const svg=qrSvg(joinUrl);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(svg);return;
+    }
+    const file=ROUTES.get(url.pathname);if(!file){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"});
+    fs.createReadStream(path.join(PUBLIC,file)).pipe(res);
+  }catch(e){res.writeHead(500);res.end('Internal error');}
+});
+const wss=new WebSocket.Server({server,maxPayload:8192});
+wss.on('connection',(ws,req)=>{
+  // Explicit same-origin policy protects join and host actions in browsers.
+  const origin=req.headers.origin;if(origin){
+    try{const a=new URL(origin),b=new URL(`http://${req.headers.host}`);if(a.host!==b.host) {ws.close(1008,'Origin not allowed');return;}}
+    catch{ws.close(1008,'Bad origin');return;}
+  }
+  ws.on('message',raw=>{
+    try{if(raw.length>8192)throw Error('Too large');const msg=JSON.parse(String(raw));processAction(ws,msg);}
+    catch(e){error(ws,'Invalid message.');}
+  });
+  ws.on('close',()=>detach(ws));ws.on('error',()=>{});
+});
+const sweeper=setInterval(()=>{
+  const now=Date.now();for(const [code,room] of rooms){if(!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000)rooms.delete(code);}
+},60*60*1000);sweeper.unref();
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 1 serving on http://localhost:${PORT}`));}
+module.exports={server,wss,rooms,processAction};

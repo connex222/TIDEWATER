@@ -1,0 +1,15 @@
+{
+  "name": "tidewater",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tidewater — server-authoritative multiplayer foundation (Phase 1)",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": { "ws": "8.18.3" }
+}
