@@ -1,14 +1,14 @@
 'use strict';
 const crypto = require('node:crypto');
 const CAPTAINS = Object.freeze([
-  { id:'isadora', name:'Captain Isadora Vane', title:'The Admiral', colour:'#C0392B', initials:'IV' },
-  { id:'tobias', name:'Old Tobias Marlow', title:'The Navigator', colour:'#1C5D99', initials:'TM' },
-  { id:'rosa', name:'Rosa Quintero', title:'The Spice Queen', colour:'#D9921A', initials:'RQ' },
-  { id:'finch', name:'Bartholomew “Barnacle” Finch', title:'The Fisherman', colour:'#2A8C6E', initials:'BF' },
-  { id:'mei-lin', name:'Lady Mei-Lin Ashcombe', title:'The Silk Merchant', colour:'#7B3B7E', initials:'MA' },
-  { id:'hugo', name:'Hugo Grimsby', title:'The Shipwright', colour:'#7A4B24', initials:'HG' },
-  { id:'nyla', name:'Captain Nyla Storm', title:'The Corsair', colour:'#1E2A44', initials:'NS' },
-  { id:'felix', name:'Master Felix Dorrington', title:'The Broker', colour:'#3BA7A0', initials:'FD' }
+  { id:'isadora', name:'Captain Isadora Vane', title:'The Admiral', colour:'#C0392B', initials:'IV', portrait:'/art/avatars/isadora_sail_neutral.png' },
+  { id:'tobias', name:'Old Tobias Marlow', title:'The Navigator', colour:'#1C5D99', initials:'TM', portrait:'/art/avatars/tobias_sail_neutral.png' },
+  { id:'rosa', name:'Rosa Quintero', title:'The Spice Queen', colour:'#D9921A', initials:'RQ', portrait:'/art/avatars/rosa_sail_neutral.png' },
+  { id:'finch', name:'Bartholomew “Barnacle” Finch', title:'The Fisherman', colour:'#2A8C6E', initials:'BF', portrait:'/art/avatars/finch_sail_neutral.png' },
+  { id:'mei-lin', name:'Lady Mei-Lin Ashcombe', title:'The Silk Merchant', colour:'#7B3B7E', initials:'MA', portrait:'/art/avatars/mei-lin_sail_neutral.png' },
+  { id:'hugo', name:'Hugo Grimsby', title:'The Shipwright', colour:'#7A4B24', initials:'HG', portrait:'/art/avatars/hugo_sail_neutral.png' },
+  { id:'nyla', name:'Captain Nyla Storm', title:'The Corsair', colour:'#1E2A44', initials:'NS', portrait:'/art/avatars/nyla_sail_neutral.png' },
+  { id:'felix', name:'Master Felix Dorrington', title:'The Broker', colour:'#3BA7A0', initials:'FD', portrait:'/art/avatars/felix_sail_neutral.png' }
 ]);
 const GOODS=Object.freeze(['fish','timber','spice','silk']);
 const TIDES=Object.freeze(['Blue','Green','Silver']);

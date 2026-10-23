@@ -5,7 +5,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const WebSocket=require('ws');
 const {CAPTAINS,MODES,randomInt}=require('./src/constants');
-const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements}=require('./src/engine');
+const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,chooseUpgrade,upgradeOptions,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
 const {qrSvg}=require('./src/qr');
 const PORT=Number(process.env.PORT)||3000;
 const PUBLIC=path.resolve(__dirname,'public');
@@ -25,7 +25,7 @@ function publish(room){
   const data=roomPublic(room);
   send(room.host,{type:'state',room:data,host:true});
   for(const p of room.players){
-    send(p.ws,{type:'state',room:data,self:{id:p.id,avatarId:p.avatarId,goods:p.goods||null,gold:p.gold??null,renown:p.renown??0}});
+    send(p.ws,{type:'state',room:data,self:{id:p.id,avatarId:p.avatarId,goods:p.goods||null,gold:p.gold??null,renown:p.renown??0,contracts:p.contracts||[],completedContracts:p.completedContracts||0,orders:room.game?.orders[p.id]||null,submitted:!!room.game?.submitted[p.id],legalTargets:legalTargets(room.game,p.id),upgrades:p.upgrades||[],upgradeOptions:room.game?upgradeOptions(room.game,p):[],deals:room.game?.deals.filter(d=>d.fromId===p.id||d.toId===p.id).map(d=>({id:d.id,fromId:d.fromId,toId:d.toId,give:d.give,receive:d.receive,status:d.status,expiresAt:d.expiresAt}))||[]}});
   }
 }
 function record(room,text){if(room.game){room.game.history.push(text);room.game.history=room.game.history.slice(-30);}}
@@ -38,7 +38,7 @@ function detach(ws){
   if(ws.kind==='host'&&room.host===ws)room.host=null;
   if(ws.kind==='player'){
     const p=room.players.find(p=>p.id===ws.playerId);
-    if(p&&p.ws===ws){p.ws=null;p.connected=false;p.ready=false;}
+    if(p&&p.ws===ws){p.ws=null;p.connected=false;if(!room.game)p.ready=false;}
   }
   publish(room);
 }
@@ -79,6 +79,34 @@ function runBotPlacement(room){
     placeSettlement(room.game,room.players,player.id,choices[randomInt(choices.length)]);
   }
 }
+function botOrders(game,p){
+  const owned=game.chart.tiles.filter(t=>t.owner===p.id);
+  const free=game.chart.tiles.find(t=>t.owner===null&&['harbour','fish','timber','spice','silk','reef'].includes(t.type)&&canSettle(game,p.id,t));
+  if(free&&p.goods.fish>0&&p.goods.timber>0)return [{kind:'settle',tileId:free.id},{kind:'hold'}];
+  const port=owned.find(t=>t.type==='harbour'&&!t.port);
+  if(port&&p.goods.spice>=2&&p.goods.silk>=2&&p.goods.timber>=1)return [{kind:'port',tileId:port.id},{kind:'hold'}];
+  const first=game.chart.lanes.find(l=>l.owner===null&&l.colour!==game.tide&&
+    owned.some(t=>t.id===l.from||t.id===l.to)&&p.goods.timber>=l.segments&&p.goods.silk>=l.segments);
+  if(first)return [{kind:'lane',laneId:first.id},{kind:'hold'}];
+  const marketGood=['spice','silk','fish','timber'].find(g=>p.goods[g]>=2);
+  if(marketGood)return [{kind:'market',direction:'sell',quantities:{[marketGood]:1}},{kind:'hold'}];
+  if(owned.length&&p.gold>=2)return [{kind:'warships',tileId:owned[0].id,count:1},{kind:'hold'}];
+  return [{kind:'hold'},{kind:'hold'}];
+}
+function progressPlanning(room,now=Date.now()){
+  if(!room.game||room.game.phase!=='plan')return;
+  // A bound prevents runaway automatic rounds in all-bot rooms.
+  for(let iterations=0;iterations<16&&room.game.phase==='plan';iterations++){
+    for(const p of room.players){if(p.bot&&!room.game.submitted[p.id]){
+      const options=upgradeOptions(room.game,p);if(options.length)chooseUpgrade(room.game,room.players,p.id,options[randomInt(options.length)].id);
+      const result=submitOrders(room.game,room.players,p.id,botOrders(room.game,p));
+      if(!result.ok)submitOrders(room.game,room.players,p.id,[{kind:'hold'},{kind:'hold'}]);
+    }}
+    expireDeals(room.game,now);
+    if(room.game.deadline>now&&(!everyoneSubmitted(room.game,room.players)||pendingDeals(room.game,now).length))break;
+    resolveRound(room.game,room.players,now);
+  }
+}
 function processAction(ws,msg){
   if(!msg||typeof msg!=='object'||Array.isArray(msg)||typeof msg.type!=='string')return error(ws,'Malformed request.');
   if(msg.type==='create_room'){
@@ -99,7 +127,7 @@ function processAction(ws,msg){
   const room=rooms.get(ws.roomCode||'');if(!room)return error(ws,'Join a room first.');
   if(msg.type==='set_mode'){
     if(ws.kind!=='host'||room.game)return error(ws,'Only the host can select a mode in the lobby.');
-    if(!MODES[msg.mode])return error(ws,'Unknown mode.');room.mode=msg.mode;publish(room);return;
+    if(!MODES[msg.mode])return error(ws,'Unknown mode.');if(msg.mode==='advanced')return error(ws,'Advanced mode is coming in a later phase: Weather, perks and contracts are not yet ready.');room.mode=msg.mode;publish(room);return;
   }
   if(msg.type==='ready'){
     if(ws.kind!=='player'||room.game)return error(ws,'Ready status can only change in the lobby.');
@@ -121,7 +149,7 @@ function processAction(ws,msg){
     if(ws.kind!=='host')return error(ws,'Only the host may activate AI captains.');
     const p=room.players.find(p=>p.id===msg.playerId);if(!p)return error(ws,'Captain not found.');
     if(p.connected&&!p.bot)return error(ws,'Only disconnected captains may be replaced by AI.');
-    replaceWithBot(room,p);record(room,`${p.name} has taken the helm.`);runBotPlacement(room);publish(room);return;
+    replaceWithBot(room,p);record(room,`${p.name} has taken the helm.`);runBotPlacement(room);progressPlanning(room);publish(room);return;
   }
   if(msg.type==='add_bot'){
     if(ws.kind!=='host'||room.game)return error(ws,'AI captains may only be added in the lobby.');
@@ -133,16 +161,43 @@ function processAction(ws,msg){
     if(ws.kind!=='host'||room.game)return error(ws,'Only the host can launch a new game.');
     if(room.players.length<2)return error(ws,'At least two captains must join.');
     if(room.players.some(p=>!p.ready||!p.connected))return error(ws,'All captains must be present and ready.');
-    room.game=newGame(room.players,room.mode);runBotPlacement(room);publish(room);return;
+    room.game=newGame(room.players,room.mode);runBotPlacement(room);progressPlanning(room);publish(room);return;
   }
   if(msg.type==='place'){
     if(ws.kind!=='player'||!room.game)return error(ws,'There is no active placement turn.');
     const result=placeSettlement(room.game,room.players,ws.playerId,msg.tileId);
-    if(!result.ok)return error(ws,result.error);runBotPlacement(room);publish(room);return;
+    if(!result.ok)return error(ws,result.error);runBotPlacement(room);progressPlanning(room);publish(room);return;
   }
-  return error(ws,'Unknown action or not available during Phase 1.');
+  if(msg.type==='choose_upgrade'){
+    if(ws.kind!=='player'||!room.game)return error(ws,'Only a captain may select an upgrade.');
+    const p=room.players.find(p=>p.id===ws.playerId);if(!p||p.bot||p.ws!==ws)return error(ws,'Not your active captain session.');
+    const result=chooseUpgrade(room.game,room.players,p.id,msg.upgradeId);
+    if(!result.ok)return error(ws,result.error);publish(room);return;
+  }
+  if(msg.type==='answer_deal'){
+    if(ws.kind!=='player'||!room.game)return error(ws,'Only a captain may answer a deal.');
+    const p=room.players.find(p=>p.id===ws.playerId);if(!p||p.bot||p.ws!==ws)return error(ws,'Not your active captain session.');
+    if(typeof msg.accept!=='boolean')return error(ws,'Choose Accept or Decline.');
+    const result=answerDeal(room.game,room.players,p.id,msg.dealId,msg.accept);
+    if(!result.ok){publish(room);return error(ws,result.error);}
+    progressPlanning(room);publish(room);return;
+  }
+  if(msg.type==='submit_orders'){
+    if(ws.kind!=='player'||!room.game)return error(ws,'Only a captain may submit orders.');
+    const captain=room.players.find(p=>p.id===ws.playerId);if(!captain||captain.ws!==ws||captain.bot)return error(ws,'Only your active captain session may submit orders.');
+    if(room.game.phase==='plan'&&Date.now()>=room.game.deadline){progressPlanning(room);publish(room);return error(ws,'The planning window has closed.');}
+    const result=submitOrders(room.game,room.players,ws.playerId,msg.orders);
+    if(!result.ok)return error(ws,result.error);
+    progressPlanning(room);publish(room);return;
+  }
+  if(msg.type==='resolve_now'){
+    if(ws.kind!=='host'||room.game?.phase!=='plan')return error(ws,'Only the host may end the planning window.');
+    resolveRound(room.game,room.players);progressPlanning(room);publish(room);return;
+  }
+  return error(ws,'Unknown action or not available in this phase.');
 }
 const ROUTES=new Map([['/','tv.html'],['/tv.html','tv.html'],['/phone.html','phone.html']]);
+const MIME={'.html':'text/html; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml; charset=utf-8','.webp':'image/webp','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
   try{
     const url=new URL(req.url,'http://localhost');
@@ -154,6 +209,13 @@ const server=http.createServer((req,res)=>{
       const protocol=req.headers['x-forwarded-proto']==='https'?'https':req.socket.encrypted?'https':'http';
       const joinUrl=`${protocol}://${host}/phone.html?room=${code}`;
       const svg=qrSvg(joinUrl);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(svg);return;
+    }
+    if(url.pathname.startsWith('/art/')){
+      const asset=path.resolve(PUBLIC,'.'+url.pathname);
+      if(!asset.startsWith(path.join(PUBLIC,'art'))||!fs.existsSync(asset)){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
+      const ext=path.extname(asset).toLowerCase();
+      res.writeHead(200,{'Content-Type':MIME[ext]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+      fs.createReadStream(asset).pipe(res);return;
     }
     const file=ROUTES.get(url.pathname);if(!file){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"});
@@ -173,8 +235,16 @@ wss.on('connection',(ws,req)=>{
   });
   ws.on('close',()=>detach(ws));ws.on('error',()=>{});
 });
+const planningClock=setInterval(()=>{
+  const now=Date.now();for(const room of rooms.values()){
+    if(room.game?.phase==='plan'){
+      const changed=expireDeals(room.game,now);
+      if(now>=room.game.deadline||changed){progressPlanning(room,now);publish(room);}
+    }
+  }
+},350);planningClock.unref();
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000)rooms.delete(code);}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 1 serving on http://localhost:${PORT}`));}
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 4 serving on http://localhost:${PORT}`));}
 module.exports={server,wss,rooms,processAction};

@@ -1,81 +1,122 @@
-# Tidewater — Phase 1 (v0.1.0)
+# TIDEWATER — Phase 4 (v0.4.0)
 
-A **runnable multiplayer foundation** for the Tidewater Isles, based on the full user-provided game specification in `SPECIFICATION.md`. This phase is **not** the complete game. Its playable journey ends after the opening settlements and Round 1 income.
+**TV-hosted, phone-controlled, server-authoritative island trading game.**
 
-## What is working
+Phase 4 builds on the approved logo, eight photorealistic captains, contracts, exploration and naval raids. It adds private 20-second player deals, optional per-era upgrade selections and trophy scoring. All artwork has been repackaged in high-quality WebP for faster TV and phone loading. The original `SPECIFICATION.md` is retained unchanged as the **authoritative design specification**.
 
-- Node.js HTTP + WebSocket server, using only the external dependency `ws`.
-- Four-letter room codes, same-origin phone joins, and an on-server QR-code generator (no web service).
-- Host-mode selection (Quick, Standard, Advanced), protected host controls, 2–8 captains, ready checks and duplicate-avatar prevention.
-- Eight named captains with their official colours; initials-based portrait fallback is displayed until commissioned portrait artwork arrives.
-- Persistent *client-side* rejoin tokens in `localStorage`; host session token in `sessionStorage`.
-- Host can remove lobby players, add an AI captain, and replace a disconnected player with AI. Phase 1 AI selects legal initial settlements only.
-- Server-authoritative 37-hex archipelago with exactly 6 Fish, 6 Timber, 5 Spice, 5 Silk, 6 Harbour, 4 Reef, 4 Open Sea and 1 Grand Bazaar.
-- Exactly 18 sea lanes, 6 in each of Blue/Green/Silver, with lengths 2–4 hex segments. Solid/dashed/dotted line patterns aid colour discrimination.
-- Correct snake-order two-settlement opening; each starts with one Warship. Initial personal resources are 2 Gold plus 1 of each good.
-- First tide and next-tide preview; first-round island production income.
-- Responsive TV and phone user interfaces; How to Play and lore accessible on both screens. TV has an opt-in synthesized notification bell.
-- Automated tests for game state, geometry, protocol permissions, QR generation, and HTML script parsing.
+## Requirements
+
+- Node.js **20+** and npm.
+- A TV, PC or laptop for the shared chart, and a phone, tablet or another browser tab for each player.
+- All players must reach the same host over HTTPS/WSS in production (or via its local network address when testing).
 
 ## Run locally
 
-Requirements: **Node.js 20+** and npm, with internet access to install the single runtime dependency.
-
-```bash
+```sh
 npm install
+npm test
 npm start
 ```
 
-Open `http://localhost:3000/tv.html` on the hosting computer. With a phone on the same Wi-Fi, **the TV page must be opened using the computer's local IP address**, e.g. `http://192.168.1.25:3000/tv.html`, so the QR code points to an address the phone can reach. On a public deployment, the QR uses the public domain.
+Open `http://localhost:3000/tv.html` on the host. The host displays a **four-letter room code** and a QR code. Open the phone link on a different device or browser tab, pick an available captain, and tap **I'm Ready**. Two or more captains are required. The host presses **Set Sail**.
 
-1. On the TV, choose the game mode.
-2. On each phone, scan the QR or enter `http://YOUR-HOST:3000/phone.html?room=CODE`.
-3. Enter a name, select an unused captain and tap **Join the Fleet**, then **I'm Ready**.
-4. When all captains are ready, press **Set Sail** on the TV.
-5. Captains choose their two initial islands in snake order on their phones. The TV shows the public chart; private starting resources stay on phones.
-6. After the last placement, Round 1 tide and production income resolve. Phase 1 ends there; later turns are deliberately disabled until the full rules are coded.
+If using separate devices on a home network, use the host PC's local IP address instead of `localhost` so phones can connect to that PC.
 
-**Browser testing:** `localhost` and a private IP are different browser origins. For multiple test captains on one computer, use separate browser profiles/incognito windows so the `localStorage` rejoin credentials do not collide.
+### Sample game
 
-## Test
+1. Start a **Quick** voyage (8 rounds; 60-second planning timer).
+2. Each player places two free Settlements in snake order. Each gets one Warship.
+3. On each phone's **Captain's Log**, select two orders. `Hold Position` is allowed when you cannot or do not wish to spend resources.
+4. Press **Hoist Sails** to lock the orders. They cannot be altered once submitted.
+5. The server reveals the round when everyone submits, the timer expires, or the host presses **Reveal Now**.
+6. Watch the new chart state, resource balances, Renown and prices update, then plan the next round.
 
-```bash
-npm test
-```
+## Order types available in this build
 
-The tests use Node's built-in `node:test` runner. The protocol tests employ a deliberately small mocked WebSocket transport to exercise server action handling. **A real two-phone network/browser acceptance test has not yet been performed**, and was not possible in this build environment because npm registry access was unavailable.
+| Order | Cost | Effect |
+| --- | --- | --- |
+| Settle | 1 Fish + 1 Timber | Claim an unowned production isle, Harbour or Reef within reach of your island or claimed sea lane. |
+| Build Port | 2 Spice + 2 Silk + 1 Timber | Upgrade an owned Harbour; earn 2 additional Renown. |
+| Chart Lane | 1 Timber + 1 Silk **per segment** | Claim a complete, available lane which touches an owned island. Closed at Low Tide. |
+| Launch Warships | 2 Gold each, 1–3 in an order | Station on an owned island. |
+| Explore | 3 Gold + 1 Spice | Draw 1 Voyage Contract from the remaining deck. One successful Explore per captain per round. |
+| Raid | Free order slot | Attack an adjacent enemy island using all adjacent Warships. Defender wins ties; Reefs and Ports improve defence. |
+| Go to Market | Free order slot; payment for purchases | Buy goods for displayed price +1 per unit, or sell at the current price. Multiple goods per order (up to 10 of each / 20 total). |
+| Offer a Deal | Free order slot | Propose a private exchange of goods and/or Gold to another captain. Recipient accepts or declines within up to 20 seconds. |
+| Hold Position | Free | No action, using one of the two order slots. |
 
-## Deploy to Render
+The Phone highlights candidate expansion islands; the server checks adjacency, costs, ownership and Low Tide before accepting an order. Planned orders are validated together so a player cannot submit a planned double-spend. Execution happens in **rotating player order**. When a valid planned action becomes impossible because of other players, the player is not charged and receives the specified **+1 Gold failed-order compensation**.
 
-- New **Web Service**, Node runtime.
-- Connect a GitHub repository containing these files.
-- **Build Command:** `npm install`
-- **Start Command:** `npm start`
-- **Environment:** `NODE_ENV=production` (optional). Render supplies `PORT`.
-- Use a **single instance** while game rooms are held in memory. WebSocket sessions and rooms are not shared across instances.
-- Open `https://YOUR-RENDER-DOMAIN/tv.html`. The room QR will point to your HTTPS phone page.
-- Render free-tier hibernation or instance restarts will lose in-memory rooms. Persistence/recovery is a later hardening task.
+### Market price handling
 
-**No GitHub push or Render deployment has been performed** as no destination repository/service was supplied for Tidewater in this request.
+Market prices start at **2**. Every sell order reducing a particular good's price lowers the current price for later orders in that round by **1**, minimum 1. The market board publishes the new prices at the end of Reveal. Unsold goods rise by 1 (maximum 4). Buying does not alter prices. Trade purchases cost price **+1** for each unit. This is the current implementation interpretation of potentially ambiguous market wording in the specification.
 
-## Phase boundary and rule decisions
+### Scoring in Phase 4
 
-The original `SPECIFICATION.md` is authoritative. Phase 1 covers the networking, presentation and initial placement slices only. Deliberately **not implemented yet**: 24 Voyage Contracts or selecting 2 of 3, two secret orders, full 12-round turns and timers, market orders and prices changing, player deals, charting lanes, ports, warship purchases, battle dice, upgrades, weather, Renown victory checks, eras and Advanced avatar perks. The source does not specify names/details for all 24 Voyage Contracts.
+- Claiming a Harbour earns **1 Renown**.
+- Upgrading that Harbour to a Port earns **an additional 2 Renown**.
+- First reaching **10 Renown (Quick)** or **15 (Standard)** at resolution, or having the most Renown at the final round, wins. Ties break by Gold, then claimed sea lanes, then remain tied.
+- Voyage Contracts award 2–3 Renown as completed. **Longest Trade Route** and **Mightiest Fleet** award 2 Renown to the unique current leader; when leadership changes those points move to the new owner, and ties leave the trophy unclaimed. A fleet must have at least 5 Warships.
+- **Master Trader** awards +1 Renown to the leading seller(s) at the end of each era, based on Gold earned from Market sales in that era. No award is issued if nobody sold anything.
+- Era Upgrade Cards and their principal abilities are available as optional choices; Advanced mode and its avatar perks remain disabled.
 
-The harbour tiles currently occupy six symmetrically distributed anchor positions two hexes from the Grand Bazaar to guarantee 18 short, traversable harbour/Bazaar connections; all other tile types and the lane colours are shuffled each game. This is a **topology implementation choice**, not a new player rule, and can be revisited with more natural sea-route geography.
+At the beginning of a round, each owned production isle gives one good, Harbours give 1 Gold, Ports 2 Gold, and open claimed sea lanes give 1 Gold (+1 if connected to the Grand Bazaar). A house tied for last Renown also receives +1 Gold. The tide changes before income is paid, and the next tide is visible in advance.
 
-The tie-handling rule for the "last place on Renown gets +1 Gold" catch-up is unspecified. To avoid assuming whether tied captains all qualify, that bonus is deferred until the round engine phase. Market sale price adjustment also differs in the brief ("drops 1 when anyone sells a good") versus the full build prompt ("drops by 1 per sell order"); this needs a clear decision before market logic is completed.
+The **Quick** Era timeline is 3 Sail / 3 Cannon / 2 Steam rounds; **Standard** is 4 / 4 / 4. On the first planning round of each era, the phone offers 3 relevant upgrade cards. Choose **one before locking orders**. Unlike a compulsory draft, unchosen upgrades are skipped rather than automatically assigned; this is a documented Phase 4 simplification. Players may choose the same card as each other.
 
-**Artwork/audio status:** Phase 1 includes designed CSS/SVG nautical branding and animated water, but **not** the requested commissioned 8 × 3 × 3 portrait set, bundled IM Fell English/Inter font files, or final gull/waves/coins/cannon/sea-shanty sound effects. No misleading artwork placeholders or external image requests are present; captain initials are the explicit specification fallback. The synth bell needs the user's first click to enable sound.
+### Voyage Contracts in this delivery
 
-## Technology and privacy
+- Each captain begins with **2 secret Voyage Contracts** from a shared deck.
+- `Explore` draws **1 additional contract**.
+- Completed contracts award **2–3 Renown** automatically at the end of Reveal.
+- This is a practical Phase 3 slice; the specification's full “draw 3, keep at least 2” draft step is still a later UX refinement.
 
-All assets included in Phase 1 are local. The game uses no CDN, advertising or analytics. The server is authoritative for room membership and opening placement actions. Private captain inventory and rejoin credentials are never included in the TV public state. All rooms are ephemeral; do not rely on this phase to save a match across server restarts.
+### Private trading rules
 
-## Next build phase
+- A trade offer uses **one of the two order slots**. On locking your orders, the recipient gets a private offer to exchange the specified goods or Gold. The sender cannot cancel a locked offer.
+- Both sides must offer something; amounts must be whole numbers and the sender must own their outgoing goods. At acceptance the server rechecks the two warehouses and performs both transfers together.
+- The acceptance window is **up to 20 seconds**, closing at the earlier of 20 seconds or the end of the planning timer. All player orders can be locked while a deal is pending; Reveal waits for its answer or expiry unless the host explicitly ends the round. Declined/expired offers do not transfer any goods.
+- Successful exchanges are announced by captain name on the TV; transaction terms remain visible only on the two participating phones.
 
-1. Implement locked-in two-order planning, validated server resolution and final Market price updates.
-2. Add island adjacency rules for Settle, Port prerequisites and owned-lane charting.
-3. Introduce Voyage Contracts, Renown, trophy scoring and automatic win checks; agree contract contents and market price semantics first.
-4. Add live timer, disconnect grace period, replay-safe command IDs, deterministic simulations and phone/TV acceptance testing.
-5. Produce and integrate approved logo/art, portable font licenses and high-quality sound assets.
+### Era upgrade cards
+
+| Era | Choices | Effects |
+| --- | --- | --- |
+| Sail | Shipwrights / Fishmongers' Guild / Privateers | Discount Timber when charting a lane / sell Fish for at least 3 Gold / add 2 Warships now, 1 at later era changes |
+| Cannon | Deep Harbours / Trade Winds / Coastal Forts | Discount Silk when building Ports / earn lane income despite Low Tide / +1 defence to owned islands |
+| Steam | Steam Packets / Admiralty House / Chamber of Commerce | Chart during Low Tide / first owned Port gains +2 Renown / +1 per completed Voyage Contract |
+
+Raid capture now transfers the ownership-related Renown of Harbours and Ports. A house with no islands automatically receives a free vacant settlement at the start of the following round when a legal unclaimed tile exists.
+
+## Render deployment
+
+This package includes `render.yaml` for a Node web service. Push the files to your own repository, connect that repository to Render as a Blueprint/web service, and deploy. Render supplies the `PORT` environment variable automatically; this server binds to `0.0.0.0`.
+
+The health probe is `/health`. All rooms and games are currently held **in process memory**; restarting the instance discards active games. Persistent storage/recovery and scale-out are later architecture tasks. For reliable casual game nights, use one always-on instance and do not restart it during a match.
+
+## Automated QA
+
+Run `npm test`. The suite covers game rules, trading privacy, server authorisation, deals, upgrades, trophy transfers, image HTTP serving, chart generation, simulated voyages and inline UI script syntax. It also catches double-trading, invalid deal quantities and unauthorised acceptance. Full browser-device QA remains necessary.
+
+**Testing limitation in this delivery environment:** the `ws` dependency is not available in the local npm cache, so live end-to-end testing through real browser WebSocket connections could not be completed here. The automated protocol tests use a mock transport. Do not treat this as confirmation that the full multi-device application is production-ready.
+
+## Phase 4 limitations / subsequent work
+
+- **Not implemented:** Advanced Weather cards, avatar-specific perks, full initial Voyage Contract selection (deal 3/keep at least 2), strict compulsory era drafts, and durable match persistence.
+- **Trophy tie interpretation:** ties for Longest Trade Route or Mightiest Fleet are unclaimed. Master Trader ties share the 1-Renown award. These choices must be confirmed through playtesting against the authoritative specification.
+- **Sea battles** are server resolved but the specified simultaneous-battle fairness and animation polish still need a multiplayer review.
+- **Advanced mode** is disabled in the host UI until its distinguishing rules are available.
+- **Avatar art** includes eight photorealistic Sail-neutral portraits and a prestige logo, with WebP packaging. Cannon/Steam outfits and smug/furious expressions remain planned.
+- **Audio** uses simple generated bell/market/build/tide/victory feedback when enabled on the host, not the final recorded/generative sound package.
+- **Typography** still relies on system font fallbacks; the specification's locally bundled IM Fell English and Inter font files have not yet been supplied.
+- **Persistence** is limited to a rejoin token in the phone's `localStorage`; the server itself is not backed by a database.
+- **Accessibility/browser QA** needs a physical TV/phone pass, including TV overscan, colour contrast, touch ergonomics and screen-reader interactions.
+
+## Security/architecture
+
+- Server is authoritative for the implemented Phase 4 rules, private deals, upgrades, trophies, resources, prices, round timing and resolution.
+- Player inventory, locked order details and credentials are not broadcast to the TV or other phones. Deal details are shown only to their sender and recipient; the shared state exposes only order-ready status.
+- Authenticated session tokens allow rejoining a seat; secrets are not broadcast. Host-only controls are checked on the server.
+- HTML/CSS/JS self-contained under `public/`, no runtime CDN; only the same-origin WebSocket is required.
+
+Refer to `SPECIFICATION.md` for the eventual complete rules and `CHANGELOG.md` for what changed.

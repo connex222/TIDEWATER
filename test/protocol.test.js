@@ -1,4 +1,5 @@
 'use strict';
+const {legalPlacements}=require('../src/engine');
 const {test}=require('node:test');const assert=require('node:assert/strict');const Module=require('node:module');
 class FakeSocket{
   constructor(){this.readyState=1;this.messages=[];this.roomCode=null;this.kind=null;this.playerId=null;}
@@ -61,7 +62,7 @@ test('host can add AI and the AI completes legal opening placements',()=>{
   assert.equal(game.placementIndex,3); // AI takes its two consecutive snake-order turns.
   const second=game.chart.tiles.find(t=>['fish','timber','spice','silk'].includes(t.type)&&t.owner===null).id;
   action(a,'place',{tileId:second});assert.equal(game.placementIndex,4);
-  assert.equal(game.phase,'foundation-complete');
+  assert.equal(game.phase,'plan');
 });
 test('only the host can kick an unready player; rooms disallow ninth captain',()=>{
  const {host,room,details}=makeRoom();const guests=[];
@@ -72,4 +73,85 @@ test('only the host can kick an unready player; rooms disallow ninth captain',()
  action(guests[0],'kick',{playerId:room.players[1].id});assert.equal(room.players.length,8);
  action(host,'kick',{playerId:room.players[1].id});assert.equal(room.players.length,7);
 });
+test('secret orders are visible only to their owning phone and cannot be submitted by the host',()=>{
+  const {host,room,details}=makeRoom(),a=new FakeSocket(),b=new FakeSocket();
+  action(a,'join',{room:details.code,name:'Alyssa',avatarId:'isadora'});
+  action(b,'join',{room:details.code,name:'Bryn',avatarId:'tobias'});
+  action(a,'ready',{ready:true});action(b,'ready',{ready:true});action(host,'start');
+  for(const captain of room.game.placementOrder){
+    const sender=room.players.find(p=>p.id===captain).ws;
+    action(sender,'place',{tileId:legalPlacements(room.game)[0]});
+  }
+  assert.equal(room.game.phase,'plan');
+  const orders=[{kind:'market',direction:'sell',quantities:{fish:1}},{kind:'hold'}];
+  action(host,'submit_orders',{orders});assert.match(host.last('error').message,/captain/);
+  action(a,'submit_orders',{orders});
+  assert.equal(room.game.phase,'plan');assert.equal(room.game.submitted[a.playerId],true);
+  const hostState=host.last('state'),aState=a.last('state'),bState=b.last('state');
+  assert.equal(JSON.stringify(hostState).includes('quantities'),false);
+  assert.equal(JSON.stringify(bState).includes('quantities'),false);
+  assert.equal(aState.self.orders[0].kind,'market');assert.equal(aState.self.orders[0].quantities.fish,1);assert.equal(aState.self.orders[1].kind,'hold');
+  assert.equal(aState.self.submitted,true);assert.equal(bState.self.submitted,false);
+  action(a,'submit_orders',{orders});assert.match(a.last('error').message,/locked/);
+  action(b,'submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});
+  assert.equal(room.game.round,2);assert.equal(room.game.phase,'plan');
+  assert.equal(room.game.market.fish,1);
+});
+test('host can safely end a stalled round and AI replacement continues planning',()=>{
+  const {host,room,details}=makeRoom(),a=new FakeSocket(),b=new FakeSocket();
+  action(a,'join',{room:details.code,name:'Admiral',avatarId:'isadora'});
+  action(b,'join',{room:details.code,name:'Trader',avatarId:'tobias'});
+  action(a,'ready',{ready:true});action(b,'ready',{ready:true});action(host,'start');
+  for(const player of room.game.placementOrder){action(room.players.find(p=>p.id===player).ws,'place',{tileId:legalPlacements(room.game)[0]});}
+  action(a,'resolve_now');assert.match(a.last('error').message,/Only the host/);
+  action(host,'resolve_now');assert.equal(room.game.round,2);
+  const replacement=room.players[1];replacement.connected=false;replacement.ws=null;
+  action(host,'replace_bot',{playerId:replacement.id});
+  assert.equal(room.game.submitted[replacement.id],true);
+  assert.equal(host.last('state').room.game.submittedIds.includes(replacement.id),true);
+});
+test('two AI captains can complete all timed rounds without clients becoming stuck',()=>{
+  const {host,room}=makeRoom();action(host,'add_bot');action(host,'add_bot');action(host,'start');
+  assert.equal(room.game.phase,'finished');assert.equal(room.game.round,12);
+  assert.ok(room.game.winnerIds.length>0);
+});
 server.close();
+
+test('private trade visibility and accept permissions remain server-controlled',()=>{
+ const {host,room,details}=makeRoom(),a=new FakeSocket(),b=new FakeSocket(),c=new FakeSocket();
+ for(const [sock,name,avatar] of [[a,'Alex','isadora'],[b,'Bill','tobias'],[c,'Chloe','rosa']]){
+   action(sock,'join',{room:details.code,name,avatarId:avatar});action(sock,'ready',{ready:true});
+ }
+ action(host,'start');
+ for(const id of room.game.placementOrder)action(room.players.find(p=>p.id===id).ws,'place',{tileId:legalPlacements(room.game)[0]});
+ assert.equal(room.game.phase,'plan');
+ const offer={kind:'deal',targetId:b.playerId,give:{fish:1},receive:{silk:1}};
+ action(a,'submit_orders',{orders:[offer,{kind:'hold'}]});
+ const id=room.game.deals[0].id;
+ assert.equal(a.last('state').self.deals[0].id,id);
+ assert.equal(b.last('state').self.deals[0].id,id);
+ assert.equal(c.last('state').self.deals.length,0);
+ assert.equal(host.last('state').room.game.deals,undefined);
+ action(c,'answer_deal',{dealId:id,accept:true});assert.match(c.last('error').message,/no longer available/);
+ action(host,'answer_deal',{dealId:id,accept:true});assert.match(host.last('error').message,/Only a captain/);
+ const pa=room.players.find(p=>p.id===a.playerId),pb=room.players.find(p=>p.id===b.playerId);
+ const beforeA=pa.goods.fish,beforeB=pb.goods.silk;
+ action(b,'answer_deal',{dealId:id,accept:true});
+ assert.equal(pa.goods.fish,beforeA-1);assert.equal(pb.goods.silk,beforeB-1);
+ assert.equal(room.game.deals[0].status,'accepted');
+});
+
+test('captain upgrade choices are authorised and cannot be changed after locking orders',()=>{
+ const {host,room,details}=makeRoom(),a=new FakeSocket(),b=new FakeSocket();
+ action(a,'join',{room:details.code,name:'Anna',avatarId:'isadora'});
+ action(b,'join',{room:details.code,name:'Bob',avatarId:'tobias'});
+ action(a,'ready',{ready:true});action(b,'ready',{ready:true});action(host,'start');
+ for(const id of room.game.placementOrder)action(room.players.find(p=>p.id===id).ws,'place',{tileId:legalPlacements(room.game)[0]});
+ action(host,'choose_upgrade',{upgradeId:'privateers'});assert.match(host.last('error').message,/Only a captain/);
+ action(a,'choose_upgrade',{upgradeId:'privateers'});
+ assert.deepEqual(a.last('state').self.upgrades,['privateers']);
+ assert.equal(b.last('state').self.upgrades.length,0);
+ action(a,'submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});
+ action(a,'choose_upgrade',{upgradeId:'shipwrights'});
+ assert.match(a.last('error').message,/not available/);
+});
