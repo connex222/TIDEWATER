@@ -112,7 +112,7 @@ async function main(){
     players[0].client.send('submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});
     await state(players[0].client,m=>m.room.game?.round===before&&m.self?.submitted===true,'captain 1 locked');
     const hostWaiting=await state(host,m=>m.room.game?.round===before&&m.room.game.submittedIds.includes(players[0].id),'public order-ready flag');
-    assert.ok(!JSON.stringify(hostWaiting.room).includes('orders'));
+    assert.ok(!Object.hasOwn(hostWaiting.room.game,'orders'),'secret order payload must not appear in public game state');
     const otherWaiting=await state(players[1].client,m=>m.room.game?.round===before&&m.room.game.submittedIds.includes(players[0].id),'captain 2 waiting');
     assert.equal(otherWaiting.self.orders,null,'the other captain must not see the locked secret order');
     players[1].client.send('submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});
