@@ -1,5 +1,60 @@
 # Tidewater development history
 
+## v0.8.0 — Phase 8: Match Recovery & Host Controls
+
+- Added atomic local room snapshots with restrictive permissions and explicit schema validation, including full game state and hidden private orders.
+- Restored rooms are paused, rather than allowing stale round or trade deadlines to resolve while captains are offline.
+- Added host-only Pause Voyage and Resume Saved Voyage actions, including remaining timer and outstanding deal window restoration.
+- Extended the host TV and player phone to show recovery status and prevent active gameplay actions during the pause.
+- Retained the host's rejoin token in same-profile localStorage so a closed host tab can recover its original room after a restart.
+- Added persistence, recovered protocol session, authorisation, static HTTP and UI tests; 81 automated tests pass.
+- Included private-data `.gitignore`, Render persistent disk deployment guidance, and a human TV/PC/phone acceptance checklist.
+
+**Limitations:** Snapshot recovery is local and single-instance, requires persistent disk storage for survival of platform replacement, and has not been exercised in an actual multi-device WebSocket/browser session. No gameplay rules, thresholds or balance values were changed.
+
+
+## v0.7.0 — Phase 7: Audio, accessibility & strategy balance
+
+- Added 20-second original procedurally composed maritime theme in MP3 and Ogg.
+- Bundled eight designed event cues: bell, tide, market, build, cannon, victory, deal and warning.
+- Integrated local host sound effects, looping music, and master volume controls. Sound remains muted until a click; phone effects are a separate opt-in.
+- Added safe static media serving for `/audio/` with MIME types and GET/HEAD support.
+- Improved AI captains with distinct strategic priorities, two-slot legal order construction and resistance to double-spending or reusing one fleet for two raids.
+- Added TV and phone Renown goal progress, a concise collapsible phone orders reference, and patterned sea-lane legend text.
+- Executed **960** simple four-strategy simulated voyages, grouped by Quick, Standard and Advanced. Published results and cautions in `BALANCE-REPORT.md` and `BALANCE-REPORT.json`.
+- Preserved all published game-bible costs, victory thresholds and scoring rules; balance findings require human validation.
+- Added four regression tests for assets, safe HTTP audio serving, muted-by-default UI and valid AI orders. All **71 tests passed**.
+- Remaining: full real-device multiplayer/browser verification, professional recorded/licensed audio, persistence and human game-balance playtests.
+
+
+
+## v0.6.0 — Phase 6: Simultaneous Naval Combat and Game Feedback
+
+- Reworked Raid resolution to use one frozen pre-battle state: no sequential capture advantage.
+- Each island’s Warships may serve only one Raid per reveal; later conflicting Raid orders earn normal failed-order compensation.
+- Multiple attackers on one target contest a single common defence; defender wins all ties and attacker-versus-attacker deadlocks.
+- Cross-raids resolve simultaneously, including fleets that departed before their own home island was attacked.
+- Enforced winner/loser casualty rules and supported defender withdrawal/stranded survivors.
+- Preserved Port, Harbour and Admiralty House Renown transfer upon capture.
+- Added public structured battle reports, TV and phone battle panels, highlighted target islands, and optional cannon sound cue.
+- Added 14 focused regression tests, including 80 deterministic multi-raid stress scenarios; 67 automated tests passed.
+- Explicit simultaneous battle conventions documented in README; the authoritative SPECIFICATION.md remains unchanged.
+
+
+
+## v0.5.0 — Phase 5: Advanced Mode and Captain Identity
+
+- Enabled server-controlled Advanced mode with twelve unique Weather cards per 12-round voyage, King Tide, Fog-hidden previews and weather-modified trade/combat/income.
+- Implemented all eight avatar-specific abilities, active only in Advanced mode, with phone-side descriptions.
+- Introduced initial private 3-card Voyage Contract drafting, choosing 2 and returning the discarded card to the deck, with automatic fallback for timed rounds.
+- Changed all eras to compulsory 1-of-3 upgrades, using a legal automatic fallback if the captain does not choose before Reveal.
+- Added unfinished-contract penalties at an Advanced match conclusion; victory threshold accounts for the deductions.
+- Retained Phase 4 WebP logo, all eight portraits, 20-second private deals, three-era upgrades, trophies and the 37-tile archipelago.
+- Expanded test coverage for Weather, draft validation, market/perk discounts, forced upgrades and public-state hiding.
+
+**Design interpretations:** the specification says “keep at least 2” contracts; Phase 5 requires exactly 2 for a predictable shared deck. Nyla uses the higher of two dice when re-rolling. Royal Regatta ties award every tied leader. Tobias's one-use exemption applies first to lane income if available; otherwise to a lane claim. These are implementation decisions, not edits to `SPECIFICATION.md`.
+
+
 ## v0.4.0 — Phase 4: Diplomacy, Eras & Admiralty Trophies
 
 - Added private player-to-player Trade Offers with a 20-second acceptance window, atomic stock transfers, decline/expiry, and per-recipient WebSocket visibility.

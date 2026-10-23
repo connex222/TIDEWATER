@@ -155,3 +155,38 @@ test('captain upgrade choices are authorised and cannot be changed after locking
  action(a,'choose_upgrade',{upgradeId:'shipwrights'});
  assert.match(a.last('error').message,/not available/);
 });
+
+test('only the host may resume a paused recovered game, with its remaining timer and private orders preserved',()=>{
+ const {host,room,details}=makeRoom(),a=new FakeSocket(),b=new FakeSocket();
+ action(a,'join',{room:details.code,name:'Alice',avatarId:'isadora'});
+ action(b,'join',{room:details.code,name:'Bernie',avatarId:'tobias'});
+ action(a,'ready',{ready:true});action(b,'ready',{ready:true});action(host,'start');
+ for(const id of room.game.placementOrder)action(room.players.find(p=>p.id===id).ws,'place',{tileId:legalPlacements(room.game)[0]});
+ action(a,'submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});
+ room.paused=true;room.pauseRemainingMs=15_000;room.game.deadline=null;
+ action(b,'resume_game');assert.match(b.last('error').message,/Only the host/);
+ action(b,'submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});assert.match(b.last('error').message,/paused/);
+ assert.equal(room.game.submitted[b.playerId],undefined);
+ const snapshot=JSON.stringify(host.last('state'));
+ assert.equal(snapshot.includes('quantities'),false);
+ const now=Date.now();action(host,'resume_game');
+ assert.equal(room.paused,false);
+ assert.ok(room.game.deadline>=now+14_500&&room.game.deadline<=Date.now()+15_500);
+ assert.equal(room.game.submitted[a.playerId],true);
+ action(b,'submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});
+ assert.equal(room.game.round,2);
+});
+
+test('host may pause and resume mid-round; the clock freezes and guests cannot pause',()=>{
+ const {host,room,details}=makeRoom(),a=new FakeSocket(),b=new FakeSocket();
+ action(a,'join',{room:details.code,name:'Admiral',avatarId:'isadora'});
+ action(b,'join',{room:details.code,name:'Helmsman',avatarId:'tobias'});
+ action(a,'ready',{ready:true});action(b,'ready',{ready:true});action(host,'start');
+ for(const captain of room.game.placementOrder)action(room.players.find(p=>p.id===captain).ws,'place',{tileId:legalPlacements(room.game)[0]});
+ action(a,'pause_game');assert.match(a.last('error').message,/Only the host/);
+ action(host,'pause_game');assert.equal(room.paused,true);assert.equal(room.game.deadline,null);
+ assert.equal(host.last('state').room.game.deadline,null);
+ action(host,'resolve_now');assert.match(host.last('error').message,/paused/);
+ action(host,'resume_game');assert.equal(room.paused,false);
+ assert.ok(room.game.deadline>Date.now());
+});
