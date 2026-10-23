@@ -38,7 +38,7 @@ async function connect(url){
     socket.once('error',reject);
   });
 }
-const state=(client,predicate=()=>true,label='state')=>client.wait(m=>m.type==='state'&&predicate(m),label);
+const state=(client,predicate=()=>true,label='state')=>client.wait(m=>{if(m.type!=='state')return false;try{return predicate(m);}catch{return false;}},label);
 async function completeRound(players,host,prevRound){
   for(const p of players){
     p.client.send('submit_orders',{orders:[{kind:'hold'},{kind:'hold'}]});
