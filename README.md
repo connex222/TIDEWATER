@@ -1,4 +1,12 @@
-# TIDEWATER — Phase 10 (v0.10.0)
+# TIDEWATER — Phase 11 (v0.11.0)
+
+**Phase 11: host-disconnect safety and a repeatable real WebSocket acceptance harness.** If the authenticated TV host drops offline during an active voyage, planning and outstanding deal timers now freeze automatically; the host reconnects with the existing credentials and explicitly resumes the voyage. Stale host close events do not pause a newly authenticated TV session. No core game rules or original `SPECIFICATION.md` have changed.
+
+Run automated checks: `npm test` (113 Node tests), then `npm run test:live` (real local TCP/WebSocket host and two captains, requiring `npm install`). `npm run test:release` runs both. GitHub Actions runs these checks upon a pushed branch/PR once this code is uploaded. For verified results, limits and real-device release checklist, read **`PHASE11-QA.md`**.
+
+**Test limitation:** the `ws` dependency was unavailable in this build environment owing to npm registry DNS failure. The full 113-test mocked-transport suite and seven Chromium synthetic-layout checks passed, but the new live acceptance runner could not be executed here. Physical TVs, phones and Render disk recovery are not yet acceptance-verified.
+
+---
 
 **TV-hosted, phone-controlled, server-authoritative island trading game.**
 

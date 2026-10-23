@@ -10,7 +10,7 @@ const MAX_MS=90_000;
 function serialiseRoom(room,now=Date.now()){
   return {
     code:room.code,token:room.token,mode:room.mode,createdAt:room.createdAt,
-    paused:!!room.paused,pauseRemainingMs:room.paused?room.pauseRemainingMs:null,
+    paused:!!room.paused,pauseReason:room.paused?(room.pauseReason||'host'):null,pauseRemainingMs:room.paused?room.pauseRemainingMs:null,
     dealRemainingMs:Object.fromEntries((room.game?.deals||[]).filter(d=>d.status==='pending').map(d=>[d.id,room.paused?(room.dealRemainingMs?.[d.id]??Math.max(0,d.expiresAt-now)):Math.max(0,d.expiresAt-now)])),
     players:room.players.map(p=>Object.fromEntries(Object.entries(p).filter(([k])=>k!=='ws'))),
     game:room.game
@@ -72,7 +72,7 @@ function restoreSnapshot(file,now=Date.now()){
     const players=saved.players.map(p=>({...p,ws:null,connected:!!p.bot,ready:p.bot?true:(game?!!p.ready:false)}));
     rooms.set(saved.code,{
       code:saved.code,token:saved.token,host:null,mode:saved.mode,createdAt:saved.createdAt||now,
-      players,game,paused,pauseRemainingMs,dealRemainingMs
+      players,game,paused,pauseReason:paused?'server-restart':null,pauseRemainingMs,dealRemainingMs
     });
   }
   return rooms;

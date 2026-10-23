@@ -33,7 +33,7 @@ function send(ws,message){
 }
 function error(ws,message){send(ws,{type:'error',message});}
 function roomPublic(room){return {
-  code:room.code,mode:room.mode,phase:room.game?.phase||'lobby',paused:!!room.paused,
+  code:room.code,mode:room.mode,phase:room.game?.phase||'lobby',paused:!!room.paused,pauseReason:room.paused?(room.pauseReason||'host'):null,
   captains:CAPTAINS,players:room.players.map(({id,name,avatarId,ready,connected,bot,renown})=>({id,name,avatarId,ready,connected,bot,renown:renown||0})),
   game:room.paused&&room.game?{...publicGame(room.game),deadline:null}:publicGame(room.game)
 };}
@@ -47,12 +47,23 @@ function publish(room){
 }
 function record(room,text){if(room.game){room.game.history.push(text);room.game.history=room.game.history.slice(-30);}}
 function availableAvatar(room,requested,exceptId=null){return CAPTAINS.some(c=>c.id===requested)&&!room.players.some(p=>p.id!==exceptId&&p.avatarId===requested);}
-function initialRoom(ws){const room={code:makeCode(),token:makeToken(),host:ws,mode:'standard',players:[],game:null,createdAt:Date.now(),paused:false,pauseRemainingMs:null,dealRemainingMs:{}};rooms.set(room.code,room);return room;}
+function initialRoom(ws){const room={code:makeCode(),token:makeToken(),host:ws,mode:'standard',players:[],game:null,createdAt:Date.now(),paused:false,pauseReason:null,pauseRemainingMs:null,dealRemainingMs:{}};rooms.set(room.code,room);return room;}
 function safeName(raw){const text=typeof raw==='string'?raw.trim().replace(/[\u0000-\u001F\u007F<>]/g,''):'';return text.length>=2&&text.length<=24?text:null;}
+// Preserve the deadline of every open decision when the TV host leaves.
+// A host session takeover does not count as a disconnect: detach only pauses
+// when the socket still owns room.host. The returning host resumes explicitly.
+function pauseRoom(room,reason='host',now=Date.now()){
+  if(!room.game||room.paused||!['placement','plan'].includes(room.game.phase))return false;
+  room.pauseRemainingMs=room.game.phase==='plan'?Math.max(1000,Math.min(MODES[room.mode].planSeconds*1000,(room.game.deadline??now)-now)):null;
+  room.dealRemainingMs=Object.fromEntries((room.game.deals||[]).filter(d=>d.status==='pending').map(d=>[d.id,Math.max(0,d.expiresAt-now)]));
+  room.paused=true;room.pauseReason=reason;
+  if(room.game.phase==='plan')room.game.deadline=null;
+  return true;
+}
 function detach(ws){
   if(!ws.roomCode)return;
   const room=rooms.get(ws.roomCode);if(!room)return;
-  if(ws.kind==='host'&&room.host===ws)room.host=null;
+  if(ws.kind==='host'&&room.host===ws){room.host=null;if(pauseRoom(room,'host-disconnected'))record(room,'⚓ TV host disconnected. Voyage paused automatically.');}
   if(ws.kind==='player'){
     const p=room.players.find(p=>p.id===ws.playerId);
     if(p&&p.ws===ws){p.ws=null;p.connected=false;if(!room.game)p.ready=false;}
@@ -231,11 +242,7 @@ function processAction(ws,msg){
   }
   if(msg.type==='pause_game'){
     if(ws.kind!=='host'||!room.game||room.paused||!['placement','plan'].includes(room.game.phase))return error(ws,'Only the host may pause an active voyage.');
-    const now=Date.now();
-    room.pauseRemainingMs=room.game.phase==='plan'?Math.max(1000,Math.min(MODES[room.mode].planSeconds*1000,(room.game.deadline??now)-now)):null;
-    room.dealRemainingMs=Object.fromEntries((room.game.deals||[]).filter(d=>d.status==='pending').map(d=>[d.id,Math.max(0,d.expiresAt-now)]));
-    room.paused=true;
-    if(room.game.phase==='plan')room.game.deadline=null;
+    pauseRoom(room,'host');
     record(room,'⚓ The host has paused the voyage.');publish(room);return;
   }
   if(msg.type==='resume_game'){
@@ -245,7 +252,7 @@ function processAction(ws,msg){
       room.game.deadline=now+Math.max(1000,Math.min(MODES[room.mode].planSeconds*1000,room.pauseRemainingMs??MODES[room.mode].planSeconds*1000));
       for(const d of room.game.deals||[])if(d.status==='pending')d.expiresAt=now+Math.max(0,Math.min(20_000,room.dealRemainingMs?.[d.id]??20_000));
     }
-    room.paused=false;room.pauseRemainingMs=null;room.dealRemainingMs={};
+    room.paused=false;room.pauseReason=null;room.pauseRemainingMs=null;room.dealRemainingMs={};
     record(room,'⚓ The Admiralty has resumed this voyage.');
     runBotPlacement(room);progressPlanning(room);publish(room);return;
   }
@@ -349,5 +356,5 @@ const planningClock=setInterval(()=>{
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.game&&!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000){rooms.delete(code);saveRooms();}}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 10 serving on http://localhost:${PORT}`));}
-module.exports={server,wss,rooms,processAction,botOrders,roomPublic};
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 11 serving on http://localhost:${PORT}`));}
+module.exports={server,wss,rooms,processAction,botOrders,roomPublic,detach,pauseRoom};

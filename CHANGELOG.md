@@ -1,5 +1,16 @@
 # Tidewater development history
 
+## v0.11.0 — Phase 11: Multiplayer Acceptance & Host-Loss Safety
+
+- Automatically pause in-progress voyages when the active TV host disconnects. Preserve remaining Plan and Deal countdowns, inventories and all locked orders.
+- Authenticate rejoining hosts with the existing token and require the host to explicitly resume. A superseded host's delayed close never pauses the successor.
+- Expose a public, non-sensitive pause reason for more useful host/phone status messages; restore interrupted matches with a `server-restart` pause reason.
+- Add a genuine TCP/WebSocket local acceptance runner (`npm run test:live`) covering QR, unauthorised clients, join/ready, snake placements, private contracts/orders, host outage/rejoin and complete Quick games.
+- Add GitHub Actions automated checks for the full Node suite plus the real WebSocket loopback runner after repository upload.
+- Add seven regression tests and an explicit physical-device/Render release checklist (`PHASE11-QA.md`).
+- QA in this build environment: 113/113 Node regression tests and 7/7 synthetic Chromium smoke checks passed; live WebSocket test requires installing `ws` and could not execute here.
+
+
 ## v0.10.0 — Phase 10: Game-Night Reliability & Release QA
 
 - Added a permission-restricted `.bak` backup containing the previous valid match snapshot, with an explicit manual restore route that preserves the corrupt primary.

@@ -1,0 +1,21 @@
+name: Tidewater automated acceptance
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the single runtime dependency
+        run: npm install --no-audit --no-fund
+      - name: Run engine, protocol, snapshot and UI checks
+        run: npm test
+      - name: Run true local TCP/WebSocket game-night smoke
+        run: npm run test:live

@@ -1,8 +1,8 @@
 {
   "name": "tidewater",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
-  "description": "Tidewater Phase 10 — game-night reliability, recovery backups and full-match protocol testing",
+  "description": "Tidewater Phase 11 \u2014 host disconnect safety, live WebSocket acceptance and release checks",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
@@ -10,7 +10,9 @@
     "dev": "node --watch server.js",
     "test": "node --test",
     "balance": "node tools/balance_tournament.js 100",
-    "test:game-night": "node --test test/phase10.test.js"
+    "test:game-night": "node --test test/phase10.test.js",
+    "test:live": "node tools/phase11-live-acceptance.js",
+    "test:release": "npm test && npm run test:live"
   },
   "engines": {
     "node": ">=20"
