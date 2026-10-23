@@ -1,10 +1,19 @@
-# TIDEWATER — Phase 8 (v0.8.0)
+# TIDEWATER — Phase 9 (v0.9.0)
 
 **TV-hosted, phone-controlled, server-authoritative island trading game.**
 
-Phase 8 focuses on **restart recovery and relaxed game-night hosting**, while preserving all Phase 7 trading, diplomacy, naval-combat, artwork and audio systems. The original `SPECIFICATION.md` is retained unchanged and remains the authoritative gameplay specification.
+Phase 9 builds on restart recovery with **stronger reconnect safety, resilient phone order drafts and responsive TV/phone layouts**, while preserving all Phase 7 trading, diplomacy, naval-combat, artwork and audio systems. The original `SPECIFICATION.md` is retained unchanged and remains the authoritative gameplay specification.
 
-## What changed in Phase 8
+## What changed in Phase 9
+
+- **Session handover security:** reconnecting on another browser/device immediately invalidates an old captain or host socket. Old frames cannot change live state after handover.
+- **Heartbeat detection:** the server sends periodic WebSocket ping frames; disconnected or unresponsive clients are removed from the active session, allowing the existing rejoin/AI replacement path to work.
+- **Phone draft recovery:** the two secret order choices are saved only in that phone tab's sessionStorage, scoped by room, captain and round. Focused editors are no longer replaced by routine server updates, and offline edits survive a page reload in that tab.
+- **Connection feedback:** both screens indicate lost connections; actions are guarded while offline. A second tab/device takeover does not trigger endless reconnect contention.
+- **Layout improvements:** 320px phone-header overflow fixed, supporting text made easier to read and the TV presentation uses larger overscan margins.
+- **QA:** **90/90 automated tests passed**, including nine new regressions. Chromium visual/input smoke checks succeeded at 320, 390, 600, 760, 1280 and 1920px using **mocked WebSocket messages**, not genuine transport sessions. See `PHASE9-QA.md`.
+
+## Phase 8 match recovery (retained)
 
 - **Durable snapshots:** one local JSON room snapshot updated automatically when room state changes, written atomically with restricted file permissions; the file contains sensitive room/session credentials and must remain private.
 - **Server restart recovery:** saved room codes, host and player tokens, private plans, inventories, contracts, upgrades, trade offers and the full board can be restored into an explicitly paused state.
@@ -121,11 +130,11 @@ Raid capture transfers the ownership-related Renown of Harbours and Ports. A hou
 
 This package includes `render.yaml` for a Node web service. Push the files to your own repository, connect that repository to Render as a Blueprint/web service, and deploy. Render supplies the `PORT` environment variable automatically; this server binds to `0.0.0.0`.
 
-The health probe is `/health`. All rooms and games are currently held **in process memory**; restarting the instance discards active games. Persistent storage/recovery and scale-out are later architecture tasks. For reliable casual game nights, use one always-on instance and do not restart it during a match.
+The health probe is `/health`. The server now writes **single-instance JSON snapshots** via `TIDEWATER_STATE_FILE` (default `data/rooms.json`). For reliable restart recovery, configure a **persistent disk** and point `TIDEWATER_STATE_FILE` inside its mount. The default application filesystem may be ephemeral after deployment. Restarted active games are paused until the host resumes. Multi-instance scale-out is not supported.
 
 ## Automated QA
 
-Run `npm test`. The 81-test suite covers game rules, trading privacy, server authorisation, deals, upgrades, trophy transfers, image/audio HTTP serving, chart generation, simulated voyages, on-disk recovery, host pause/resume and inline UI script syntax. It also catches double-trading, invalid deal quantities and unauthorised acceptance. Full browser-device QA remains necessary.
+Run `npm test`. The 90-test suite covers game rules, trading privacy, server authorisation, deals, upgrades, trophy transfers, image/audio HTTP serving, chart generation, simulated voyages, on-disk recovery, host pause/resume and inline UI script syntax. It also catches double-trading, invalid deal quantities and unauthorised acceptance. Phase 9 adds stale-session handover tests, WebSocket heartbeat tests and a synthetic Chromium layout/editor smoke script (`python tools/phase9_browser_smoke.py`). Real browser-device and actual WebSocket transport QA remains necessary.
 
 **Testing limitation in this delivery environment:** the `ws` dependency is not available in the local npm cache, so live end-to-end testing through real browser WebSocket connections could not be completed here. The automated protocol tests use a mock transport. Do not treat this as confirmation that the full multi-device application is production-ready.
 
@@ -145,7 +154,7 @@ Run `npm test`. The 81-test suite covers game rules, trading privacy, server aut
 
 - **Multiplayer acceptance testing** on TV, PC and mobile devices, including game reconnects, Weather/tide transitions, AI fill-ins and timing races, is still required.
 - **Persistent snapshots** are now available, but **Render needs a persistent disk** before recovery across service replacement can be guaranteed.
-- **Simultaneous raid fairness and richer battle presentation** remain future improvements.
+- **Simultaneous raid fairness and structured battle reports** are already implemented; real-player clarity and naval balance still need acceptance testing.
 - **Audio** now includes original bundled digital soundtrack and effects, but naturalistic/studio-quality recorded audio has not yet been commissioned.
 - **Avatar art** covers eight neutral Sail-era portraits; Cannon/Steam outfits and additional expressions are still outstanding.
 - **Design decisions needing approval:** exact two-contract choice, Weather tie handling, fallback era upgrade order and Nyla's higher-of-two dice interpretation.
@@ -172,6 +181,6 @@ The server gathers every valid Raid during the Reveal and resolves them against 
 
 **Game feedback:** the TV and phone show recent naval battle reports and highlight affected islands, with reduced-motion and keyboard-accessible interfaces preserved. Phase 7 replaces the earlier oscillator-only effects with original bundled MP3/Ogg cues. This is not yet a professionally recorded production package.
 
-**Historical Phase 6 QA:** Phase 6 extended 53 tests with 14 focused tests (including 80 seeded-pattern combat stress scenarios), reaching **67 tests**. Phase 7 added four tests for **71 total**. Phase 8 adds 10 focused persistence, HTTP and reconnect tests for **81 total**. Real-device TV/phone multiplayer and audio QA remains outstanding because a usable local WebSocket installation and physical devices are not available in this build environment.
+**Historical QA:** Phase 6 reached **67 tests**; Phase 7 reached **71**; Phase 8 reached **81**; Phase 9 reaches **90 automated tests**, plus synthetic Chromium layout/input checks. Real-device TV/phone multiplayer and audio QA remains outstanding because a usable local WebSocket installation and physical devices are not available in this build environment.
 
 **Deployment:** GitHub/Render are not automatically updated by creating this archive. Commit and deploy separately. Phase 8 can recover active rooms *only when its state file is retained*; deploys that replace an ephemeral filesystem still reset matches.

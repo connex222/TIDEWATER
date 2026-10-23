@@ -8,6 +8,7 @@ const {CAPTAINS,MODES,randomInt}=require('./src/constants');
 const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,applyOrder,chooseUpgrade,upgradeOptions,chooseContracts,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
 const {qrSvg}=require('./src/qr');
 const {writeSnapshot,restoreSnapshot}=require('./src/persistence');
+const {startHeartbeat}=require('./src/heartbeat');
 const PORT=Number(process.env.PORT)||3000;
 const PUBLIC=path.resolve(__dirname,'public');
 // In automated protocol tests the server is imported with a mocked transport;
@@ -177,6 +178,14 @@ function processAction(ws,msg){
   if(msg.type==='join')return join(ws,msg);
   if(msg.type==='rejoin')return rejoin(ws,msg);
   const room=rooms.get(ws.roomCode||'');if(!room)return error(ws,'Join a room first.');
+  // A previously authenticated socket is not permanently trusted. When a
+  // captain/host rejoins elsewhere, its old socket must lose every permission
+  // immediately, even before its close event has arrived.
+  if(ws.kind==='host'&&room.host!==ws)return error(ws,'This host session was replaced. Reconnect to take the helm.');
+  if(ws.kind==='player'){
+    const active=room.players.find(p=>p.id===ws.playerId);
+    if(!active||active.bot||active.ws!==ws)return error(ws,'This captain session was replaced. Reconnect on your phone.');
+  }
   if(msg.type==='set_mode'){
     if(ws.kind!=='host'||room.game)return error(ws,'Only the host can select a mode in the lobby.');
     if(!MODES[msg.mode])return error(ws,'Unknown mode.');room.mode=msg.mode;publish(room);return;
@@ -309,13 +318,17 @@ const server=http.createServer((req,res)=>{
   }catch(e){res.writeHead(500);res.end('Internal error');}
 });
 const wss=new WebSocket.Server({server,maxPayload:8192});
+const heartbeat=startHeartbeat(wss);
 wss.on('connection',(ws,req)=>{
   // Explicit same-origin policy protects join and host actions in browsers.
   const origin=req.headers.origin;if(origin){
     try{const a=new URL(origin),b=new URL(`http://${req.headers.host}`);if(a.host!==b.host) {ws.close(1008,'Origin not allowed');return;}}
     catch{ws.close(1008,'Bad origin');return;}
   }
+  ws.rateWindow=Date.now();ws.rateCount=0;
   ws.on('message',raw=>{
+    const now=Date.now();if(now-ws.rateWindow>=10_000){ws.rateWindow=now;ws.rateCount=0;}
+    if(++ws.rateCount>80){ws.close(1008,'Message rate limit exceeded');return;}
     try{if(raw.length>8192)throw Error('Too large');const msg=JSON.parse(String(raw));processAction(ws,msg);}
     catch(e){error(ws,'Invalid message.');}
   });
@@ -332,5 +345,5 @@ const planningClock=setInterval(()=>{
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.game&&!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000){rooms.delete(code);saveRooms();}}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 8 serving on http://localhost:${PORT}`));}
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 9 serving on http://localhost:${PORT}`));}
 module.exports={server,wss,rooms,processAction,botOrders,roomPublic};

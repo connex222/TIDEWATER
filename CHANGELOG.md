@@ -1,5 +1,19 @@
 # Tidewater development history
 
+## v0.9.0 — Phase 9: Reconnect Safety & Screen Polish
+
+- Hardened host/captain session authorisation: a superseded WebSocket cannot perform any bound gameplay action after a new authenticated connection takes control, including commands arriving during the old socket's close handshake.
+- Added RFC 6455 ping/pong heartbeat checks, terminating unresponsive connections so disconnected seats are shown accurately and can rejoin or be replaced with an AI captain.
+- Added a bounded 80-message-per-10-second WebSocket request limit to protect private games from accidentally flooding the server.
+- Added TV and phone connection-status banners; a captain taken over on another tab is informed rather than trapped in repeated reconnect loops.
+- Preserved two-slot secret order drafts locally in phone sessionStorage, including edits during network interruption and page refreshes. Routine room updates no longer recreate a focused order editor.
+- Corrected 320px-wide phone-header overflow, improved auxiliary text contrast and font sizes, and increased overscan safety on large TV screens.
+- Added nine automated regression tests (new total **90**) for superseded sessions, heartbeat, rate limiting, cross-origin security and UI safeguards.
+- Ran a **synthetic Chromium visual/input smoke test** at 320, 390, 600, 760, 1280 and 1920px. Tested draft preservation across server pushes, disconnect, offline edits and simulated reload. **Not** a real WebSocket or physical-device acceptance run.
+
+**No gameplay costs, scoring values or art/audio assets were changed.** The original `SPECIFICATION.md` remains the game bible. Full multi-device end-to-end acceptance is still required.
+
+
 ## v0.8.0 — Phase 8: Match Recovery & Host Controls
 
 - Added atomic local room snapshots with restrictive permissions and explicit schema validation, including full game state and hidden private orders.
