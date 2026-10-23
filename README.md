@@ -1,8 +1,8 @@
-# TIDEWATER — Phase 4 (v0.4.0)
+# TIDEWATER — Phase 5 (v0.5.0)
 
 **TV-hosted, phone-controlled, server-authoritative island trading game.**
 
-Phase 4 builds on the approved logo, eight photorealistic captains, contracts, exploration and naval raids. It adds private 20-second player deals, optional per-era upgrade selections and trophy scoring. All artwork has been repackaged in high-quality WebP for faster TV and phone loading. The original `SPECIFICATION.md` is retained unchanged as the **authoritative design specification**.
+Phase 5 builds on Phase 4 diplomacy and trophies. It enables Advanced mode with twelve distinct Weather events, eight active captain perks, a choose-two-of-three Voyage Contract draft and a compulsory era upgrade that defaults safely if a player does not choose before Reveal. The approved WebP artwork is retained. The original `SPECIFICATION.md` is retained unchanged as the **authoritative design specification**.
 
 ## Requirements
 
@@ -51,25 +51,25 @@ The Phone highlights candidate expansion islands; the server checks adjacency, c
 
 Market prices start at **2**. Every sell order reducing a particular good's price lowers the current price for later orders in that round by **1**, minimum 1. The market board publishes the new prices at the end of Reveal. Unsold goods rise by 1 (maximum 4). Buying does not alter prices. Trade purchases cost price **+1** for each unit. This is the current implementation interpretation of potentially ambiguous market wording in the specification.
 
-### Scoring in Phase 4
+### Scoring in Phase 5
 
 - Claiming a Harbour earns **1 Renown**.
 - Upgrading that Harbour to a Port earns **an additional 2 Renown**.
 - First reaching **10 Renown (Quick)** or **15 (Standard)** at resolution, or having the most Renown at the final round, wins. Ties break by Gold, then claimed sea lanes, then remain tied.
 - Voyage Contracts award 2–3 Renown as completed. **Longest Trade Route** and **Mightiest Fleet** award 2 Renown to the unique current leader; when leadership changes those points move to the new owner, and ties leave the trophy unclaimed. A fleet must have at least 5 Warships.
 - **Master Trader** awards +1 Renown to the leading seller(s) at the end of each era, based on Gold earned from Market sales in that era. No award is issued if nobody sold anything.
-- Era Upgrade Cards and their principal abilities are available as optional choices; Advanced mode and its avatar perks remain disabled.
+- Era Upgrade Cards and their principal abilities are enabled. Advanced mode now adds weather, captain-specific perks and an unfinished-contract deduction at match end.
 
 At the beginning of a round, each owned production isle gives one good, Harbours give 1 Gold, Ports 2 Gold, and open claimed sea lanes give 1 Gold (+1 if connected to the Grand Bazaar). A house tied for last Renown also receives +1 Gold. The tide changes before income is paid, and the next tide is visible in advance.
 
-The **Quick** Era timeline is 3 Sail / 3 Cannon / 2 Steam rounds; **Standard** is 4 / 4 / 4. On the first planning round of each era, the phone offers 3 relevant upgrade cards. Choose **one before locking orders**. Unlike a compulsory draft, unchosen upgrades are skipped rather than automatically assigned; this is a documented Phase 4 simplification. Players may choose the same card as each other.
+The **Quick** Era timeline is 3 Sail / 3 Cannon / 2 Steam rounds; **Standard** is 4 / 4 / 4. On the first planning round of each era, the phone offers 3 relevant upgrade cards. Choose **one before locking orders**; if none is chosen, the server automatically assigns the first listed option at Reveal so the draft is compulsory without blocking a timed game. Different players may choose the same upgrade.
 
 ### Voyage Contracts in this delivery
 
-- Each captain begins with **2 secret Voyage Contracts** from a shared deck.
+- Each captain receives **3 private Voyage Contracts** (the original two plus a reserve choice). During the first planning window they can keep exactly 2. The discarded card returns to the common deck. If no selection is made before Reveal, the first two are kept automatically.
 - `Explore` draws **1 additional contract**.
 - Completed contracts award **2–3 Renown** automatically at the end of Reveal.
-- This is a practical Phase 3 slice; the specification's full “draw 3, keep at least 2” draft step is still a later UX refinement.
+- The present UI implements **choose exactly 2 of 3**, a tighter interpretation of the specification’s “keep at least 2” requirement; this should be reviewed during multiplayer testing. If all eight captains are present, newly discarded contracts become available at the first Reveal.
 
 ### Private trading rules
 
@@ -100,21 +100,30 @@ Run `npm test`. The suite covers game rules, trading privacy, server authorisati
 
 **Testing limitation in this delivery environment:** the `ws` dependency is not available in the local npm cache, so live end-to-end testing through real browser WebSocket connections could not be completed here. The automated protocol tests use a mock transport. Do not treat this as confirmation that the full multi-device application is production-ready.
 
-## Phase 4 limitations / subsequent work
+## Phase 5 — Advanced Weather and perks
 
-- **Not implemented:** Advanced Weather cards, avatar-specific perks, full initial Voyage Contract selection (deal 3/keep at least 2), strict compulsory era drafts, and durable match persistence.
-- **Trophy tie interpretation:** ties for Longest Trade Route or Mightiest Fleet are unclaimed. Master Trader ties share the 1-Renown award. These choices must be confirmed through playtesting against the authoritative specification.
-- **Sea battles** are server resolved but the specified simultaneous-battle fairness and animation polish still need a multiplayer review.
-- **Advanced mode** is disabled in the host UI until its distinguishing rules are available.
-- **Avatar art** includes eight photorealistic Sail-neutral portraits and a prestige logo, with WebP packaging. Cannon/Steam outfits and smug/furious expressions remain planned.
-- **Audio** uses simple generated bell/market/build/tide/victory feedback when enabled on the host, not the final recorded/generative sound package.
-- **Typography** still relies on system font fallbacks; the specification's locally bundled IM Fell English and Inter font files have not yet been supplied.
-- **Persistence** is limited to a rejoin token in the phone's `localStorage`; the server itself is not backed by a database.
-- **Accessibility/browser QA** needs a physical TV/phone pass, including TV overscan, colour contrast, touch ergonomics and screen-reader interactions.
+- **Quick and Standard:** Weather events and avatar abilities stay disabled.
+- **Advanced:** each round draws one Weather card without repeats until all twelve have been used. All weather is public, although Fog hides the following round's tide preview.
+- **Fair Winds:** normal island, Harbour, sea-lane and catch-up income doubles. **Storm:** no lane income, even with Trade Winds.
+- **Doldrums:** cannot Chart Lanes. **Spice Fever / Silk Glut:** market price set to 4 / 1 at the beginning of the round.
+- **Big Catch:** +1 Fish per fishing isle. **Pirate Sighting:** houses with zero Warships lose 1 Gold (not below zero).
+- **Royal Regatta:** leaders tied for most sea lanes each earn 1 Renown, provided at least one lane is held. **Fog:** next Tide preview is hidden.
+- **Calm Seas:** no Raid orders. **Merchant Fleet:** purchases cost their listed market price. **King Tide:** two distinct lane colours close.
+- **Captain perks:** Isadora half-price Warships; Tobias ignores Low Tide once per round (used on the first eligible income lane, otherwise available for one Chart Lane); Rosa +1 Gold for every Spice sold; Finch +1 Fish per fishing isle in Sail; Mei-Lin −1 Silk per Port; Hugo −1 Timber per Chart Lane; Nyla rolls two dice and uses the higher result per battle; Felix sells at no less than 2 Gold per unit. Upgrade discounts stack with avatar discounts but costs never become negative.
+- **Unfinished Voyage Contracts:** each unfinished card deducts 1 Renown at the end of an Advanced match, with score floored at zero. The penalty counts when deciding whether a Renown threshold has been reached.
+
+## Outstanding work
+
+- **Multiplayer acceptance testing** on TV, PC and mobile devices, including game reconnects, Weather/tide transitions, AI fill-ins and timing races, is still required.
+- **Durable server storage** is still absent; a restart loses live rooms.
+- **Simultaneous raid fairness and richer battle presentation** remain future improvements.
+- **Audio** is still the basic Web Audio feedback, not a professionally produced sound package.
+- **Avatar art** covers eight neutral Sail-era portraits; Cannon/Steam outfits and additional expressions are still outstanding.
+- **Design decisions needing approval:** exact two-contract choice, Weather tie handling, fallback era upgrade order and Nyla's higher-of-two dice interpretation.
 
 ## Security/architecture
 
-- Server is authoritative for the implemented Phase 4 rules, private deals, upgrades, trophies, resources, prices, round timing and resolution.
+- Server is authoritative for the implemented Phase 5 rules, private deals, upgrades, trophies, resources, prices, round timing and resolution.
 - Player inventory, locked order details and credentials are not broadcast to the TV or other phones. Deal details are shown only to their sender and recipient; the shared state exposes only order-ready status.
 - Authenticated session tokens allow rejoining a seat; secrets are not broadcast. Host-only controls are checked on the server.
 - HTML/CSS/JS self-contained under `public/`, no runtime CDN; only the same-origin WebSocket is required.

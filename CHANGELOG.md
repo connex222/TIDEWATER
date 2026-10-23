@@ -1,5 +1,18 @@
 # Tidewater development history
 
+## v0.5.0 — Phase 5: Advanced Mode and Captain Identity
+
+- Enabled server-controlled Advanced mode with twelve unique Weather cards per 12-round voyage, King Tide, Fog-hidden previews and weather-modified trade/combat/income.
+- Implemented all eight avatar-specific abilities, active only in Advanced mode, with phone-side descriptions.
+- Introduced initial private 3-card Voyage Contract drafting, choosing 2 and returning the discarded card to the deck, with automatic fallback for timed rounds.
+- Changed all eras to compulsory 1-of-3 upgrades, using a legal automatic fallback if the captain does not choose before Reveal.
+- Added unfinished-contract penalties at an Advanced match conclusion; victory threshold accounts for the deductions.
+- Retained Phase 4 WebP logo, all eight portraits, 20-second private deals, three-era upgrades, trophies and the 37-tile archipelago.
+- Expanded test coverage for Weather, draft validation, market/perk discounts, forced upgrades and public-state hiding.
+
+**Design interpretations:** the specification says “keep at least 2” contracts; Phase 5 requires exactly 2 for a predictable shared deck. Nyla uses the higher of two dice when re-rolling. Royal Regatta ties award every tied leader. Tobias's one-use exemption applies first to lane income if available; otherwise to a lane claim. These are implementation decisions, not edits to `SPECIFICATION.md`.
+
+
 ## v0.4.0 — Phase 4: Diplomacy, Eras & Admiralty Trophies
 
 - Added private player-to-player Trade Offers with a 20-second acceptance window, atomic stock transfers, decline/expiry, and per-recipient WebSocket visibility.

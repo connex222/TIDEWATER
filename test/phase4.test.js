@@ -14,7 +14,7 @@ function stocks(p){p.goods={fish:10,timber:10,spice:10,silk:10};p.gold=60;}
 
 test('Voyage Contract deck contains exactly 24 cards before dealing',()=>{
  const players=Array.from({length:8},(_,i)=>({id:`c${i}`,name:`Captain ${i}`}));const game=newGame(players,'quick');
- assert.equal(game.contractDeck.length+players.reduce((n,p)=>n+p.contracts.length,0),24);
+ assert.equal(game.contractDeck.length+players.reduce((n,p)=>n+p.contracts.length+p.contractReserve.length,0),24);
 });
 
 test('Private deals are validated, accepted atomically, and cannot be replayed',()=>{

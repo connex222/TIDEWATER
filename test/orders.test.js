@@ -98,7 +98,7 @@ test('Explore draws a new Voyage Contract and Raid transfers an adjacent enemy i
  assert.equal(submitOrders(g,players,q.id,[hold,hold]).ok,true);
  assert.equal(resolveRound(g,players,2000).ok,true);
  assert.equal((p.contracts||[]).length,contractsBefore+1);
- assert.equal(g.contractDeck.length,deckBefore-1);
+ assert.equal(g.contractDeck.length,deckBefore+players.filter(x=>x.contractDrafted).length-1);
  // Set up a deterministic raid.
  g.chart.tiles.forEach(t=>{t.owner=null;t.warships=0;t.port=false;});
  const attackPair=g.chart.tiles.filter(t=>!['sea','bazaar'].includes(t.type)).flatMap(a=>g.chart.tiles.filter(b=>b.id!==a.id&&!['sea','bazaar'].includes(b.type)&&distance(a,b)===1).map(b=>[a,b]))[0];

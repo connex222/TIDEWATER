@@ -19,7 +19,7 @@ test('a captain cannot place out of turn, in sea, or on an already settled tile'
   assert.equal(p[0].placements,1);
 });
 test('all placements finish, Round 1 income applies, no double-claim permitted',()=>{
-  const p=newPlayers(8),g=newGame(p,'advanced');const originalGoods=p.map(x=>({...x.goods}));
+  const p=newPlayers(8),g=newGame(p,'standard');const originalGoods=p.map(x=>({...x.goods}));
   for(const id of g.placementOrder){const free=legalPlacements(g)[0];assert.equal(currentPlacer(g),id);assert.equal(placeSettlement(g,p,id,free).ok,true);}
   assert.equal(g.phase,'plan');assert.equal(g.round,1);assert.equal(g.era,'Sail');assert.equal(g.tide!==null,true);
   assert.equal(g.chart.tiles.filter(t=>t.owner!==null).length,16);

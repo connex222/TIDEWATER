@@ -1,8 +1,8 @@
 {
   "name": "tidewater",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
-  "description": "Tidewater — private deals, era upgrade drafts and trophy scoring (Phase 4)",
+  "description": "Tidewater — private deals, era upgrade drafts and trophy scoring (Phase 5)",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

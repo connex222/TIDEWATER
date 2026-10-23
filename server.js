@@ -5,7 +5,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const WebSocket=require('ws');
 const {CAPTAINS,MODES,randomInt}=require('./src/constants');
-const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,chooseUpgrade,upgradeOptions,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
+const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,chooseUpgrade,upgradeOptions,chooseContracts,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
 const {qrSvg}=require('./src/qr');
 const PORT=Number(process.env.PORT)||3000;
 const PUBLIC=path.resolve(__dirname,'public');
@@ -25,7 +25,7 @@ function publish(room){
   const data=roomPublic(room);
   send(room.host,{type:'state',room:data,host:true});
   for(const p of room.players){
-    send(p.ws,{type:'state',room:data,self:{id:p.id,avatarId:p.avatarId,goods:p.goods||null,gold:p.gold??null,renown:p.renown??0,contracts:p.contracts||[],completedContracts:p.completedContracts||0,orders:room.game?.orders[p.id]||null,submitted:!!room.game?.submitted[p.id],legalTargets:legalTargets(room.game,p.id),upgrades:p.upgrades||[],upgradeOptions:room.game?upgradeOptions(room.game,p):[],deals:room.game?.deals.filter(d=>d.fromId===p.id||d.toId===p.id).map(d=>({id:d.id,fromId:d.fromId,toId:d.toId,give:d.give,receive:d.receive,status:d.status,expiresAt:d.expiresAt}))||[]}});
+    send(p.ws,{type:'state',room:data,self:{id:p.id,avatarId:p.avatarId,goods:p.goods||null,gold:p.gold??null,renown:p.renown??0,contracts:p.contracts||[],contractReserve:p.contractDrafted?[]:p.contractReserve||[],contractDrafted:!!p.contractDrafted,completedContracts:p.completedContracts||0,orders:room.game?.orders[p.id]||null,submitted:!!room.game?.submitted[p.id],legalTargets:legalTargets(room.game,p.id),upgrades:p.upgrades||[],upgradeOptions:room.game?upgradeOptions(room.game,p):[],deals:room.game?.deals.filter(d=>d.fromId===p.id||d.toId===p.id).map(d=>({id:d.id,fromId:d.fromId,toId:d.toId,give:d.give,receive:d.receive,status:d.status,expiresAt:d.expiresAt}))||[]}});
   }
 }
 function record(room,text){if(room.game){room.game.history.push(text);room.game.history=room.game.history.slice(-30);}}
@@ -127,7 +127,7 @@ function processAction(ws,msg){
   const room=rooms.get(ws.roomCode||'');if(!room)return error(ws,'Join a room first.');
   if(msg.type==='set_mode'){
     if(ws.kind!=='host'||room.game)return error(ws,'Only the host can select a mode in the lobby.');
-    if(!MODES[msg.mode])return error(ws,'Unknown mode.');if(msg.mode==='advanced')return error(ws,'Advanced mode is coming in a later phase: Weather, perks and contracts are not yet ready.');room.mode=msg.mode;publish(room);return;
+    if(!MODES[msg.mode])return error(ws,'Unknown mode.');room.mode=msg.mode;publish(room);return;
   }
   if(msg.type==='ready'){
     if(ws.kind!=='player'||room.game)return error(ws,'Ready status can only change in the lobby.');
@@ -167,6 +167,13 @@ function processAction(ws,msg){
     if(ws.kind!=='player'||!room.game)return error(ws,'There is no active placement turn.');
     const result=placeSettlement(room.game,room.players,ws.playerId,msg.tileId);
     if(!result.ok)return error(ws,result.error);runBotPlacement(room);progressPlanning(room);publish(room);return;
+  }
+  if(msg.type==='choose_contracts'){
+    if(ws.kind!=='player'||!room.game)return error(ws,'Only a captain may select Voyage Contracts.');
+    const p=room.players.find(p=>p.id===ws.playerId);
+    if(!p||p.bot||p.ws!==ws||room.game.phase!=='plan'||room.game.submitted[p.id])return error(ws,'Finish the draft before locking orders.');
+    const result=chooseContracts(room.game,p,msg.contractIds);
+    if(!result.ok)return error(ws,result.error);publish(room);return;
   }
   if(msg.type==='choose_upgrade'){
     if(ws.kind!=='player'||!room.game)return error(ws,'Only a captain may select an upgrade.');
@@ -246,5 +253,5 @@ const planningClock=setInterval(()=>{
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000)rooms.delete(code);}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 4 serving on http://localhost:${PORT}`));}
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 5 serving on http://localhost:${PORT}`));}
 module.exports={server,wss,rooms,processAction};
