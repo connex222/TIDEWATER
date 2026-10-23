@@ -1,6 +1,19 @@
-# TIDEWATER — Phase 9 (v0.9.0)
+# TIDEWATER — Phase 10 (v0.10.0)
 
 **TV-hosted, phone-controlled, server-authoritative island trading game.**
+
+**Phase 10 is the game-night reliability and QA pass.** It adds a last-known-good backup for durable match snapshots, protects the host and other captains when an outgoing WebSocket send fails, and introduces automated full-voyage protocol tests for 2, 4 and 8 human captains in all three game modes. Existing music, sound effects, portrait art and original game specification remain unchanged.
+
+## What changed in Phase 10
+
+- **Recoverable local state:** `data/rooms.json.bak` preserves the last valid previous snapshot (0600 permissions). If the primary snapshot is corrupt, stop the server, preserve the damaged original, restore the backup to the configured `TIDEWATER_STATE_FILE`, then restart; recovered active voyages are paused pending host resume. This is a *single-instance* last-known-good snapshot, not a database or off-site backup.
+- **Fault-isolated broadcasts:** a disconnected socket throwing during a state broadcast no longer prevents other captains receiving updates.
+- **Full-voyage acceptance simulations:** 2-, 4- and 8-person lobbies proceed through captain selection, snake placements, 8/12 planning rounds, final results and shared-state privacy checks in Quick, Standard and Advanced modes.
+- **Interruption tests:** automated cases now cover AI takeover, restart/backup recovery, pausing during a partially locked round, and protection against non-member actions.
+- **QA:** **106/106 Node tests passed**; the six-width Chromium interface smoke test also passed. These are in-process simulated WebSocket connections, **not** proof of genuine physical TV/phone multiplayer.
+- **Release guidance:** see `PHASE10-QA.md` for real-device testing, Render persistent disk requirements, audio checks, and restore procedure.
+
+## Phase 9 reconnect hardening (retained)
 
 Phase 9 builds on restart recovery with **stronger reconnect safety, resilient phone order drafts and responsive TV/phone layouts**, while preserving all Phase 7 trading, diplomacy, naval-combat, artwork and audio systems. The original `SPECIFICATION.md` is retained unchanged and remains the authoritative gameplay specification.
 

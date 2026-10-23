@@ -1,15 +1,16 @@
 {
   "name": "tidewater",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
-  "description": "Tidewater Phase 9 \u2014 reconnect safety, mobile draft recovery and TV/phone UI QA",
+  "description": "Tidewater Phase 10 — game-night reliability, recovery backups and full-match protocol testing",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test",
-    "balance": "node tools/balance_tournament.js 100"
+    "balance": "node tools/balance_tournament.js 100",
+    "test:game-night": "node --test test/phase10.test.js"
   },
   "engines": {
     "node": ">=20"

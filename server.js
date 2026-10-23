@@ -26,7 +26,11 @@ const codeChars='ABCDEFGHJKLMNPQRSTUVWXYZ';
 const makeToken=()=>crypto.randomBytes(24).toString('base64url');
 const makeId=()=>crypto.randomUUID();
 function makeCode(){let value;do{value=Array.from({length:4},()=>codeChars[randomInt(codeChars.length)]).join('');}while(rooms.has(value));return value;}
-function send(ws,message){if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(message));}
+function send(ws,message){
+  if(!ws||ws.readyState!==WebSocket.OPEN)return false;
+  try{ws.send(JSON.stringify(message));return true;}
+  catch{try{ws.terminate?.();}catch{}return false;}
+}
 function error(ws,message){send(ws,{type:'error',message});}
 function roomPublic(room){return {
   code:room.code,mode:room.mode,phase:room.game?.phase||'lobby',paused:!!room.paused,
@@ -345,5 +349,5 @@ const planningClock=setInterval(()=>{
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.game&&!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000){rooms.delete(code);saveRooms();}}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 9 serving on http://localhost:${PORT}`));}
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 10 serving on http://localhost:${PORT}`));}
 module.exports={server,wss,rooms,processAction,botOrders,roomPublic};

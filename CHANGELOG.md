@@ -1,5 +1,17 @@
 # Tidewater development history
 
+## v0.10.0 — Phase 10: Game-Night Reliability & Release QA
+
+- Added a permission-restricted `.bak` backup containing the previous valid match snapshot, with an explicit manual restore route that preserves the corrupt primary.
+- Protected state broadcasts from failing socket sends; other players and the TV continue receiving updates.
+- Added complete, in-process multiplayer protocol scenarios for 2, 4 and 8 human captains across Quick, Standard and Advanced.
+- Added tests for AI takeover after disconnection, host pause/resume during partially locked planning, snapshot backup secrecy and intruder rejection.
+- Updated TV/phone footer and rules scope labels, without altering the original design specification.
+- **106/106 automated Node tests passed**; synthetic Chromium layout/input checks at 320, 390, 600, 760, 1280 and 1920px passed.
+
+**Testing boundary:** the real `ws` package could not be installed in this environment, so the WebSocket tests use a mock transport. Live phone-to-TV connectivity, sounds on real hardware, persistent Render disk mounts and real games-night balance still require external testing. GitHub/Render deployment is separate from local packaging.
+
+
 ## v0.9.0 — Phase 9: Reconnect Safety & Screen Polish
 
 - Hardened host/captain session authorisation: a superseded WebSocket cannot perform any bound gameplay action after a new authenticated connection takes control, including commands arriving during the old socket's close handshake.

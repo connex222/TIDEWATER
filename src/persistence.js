@@ -25,6 +25,22 @@ function writeSnapshot(file,rooms,now=Date.now()){
   try{
     const fd=fs.openSync(tmp,'w',0o600);
     try{fs.writeFileSync(fd,payload);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+    // Retain the last known-good primary as a separate recovery point. Never
+    // copy a corrupt or incompatible primary over a healthy backup.
+    if(fs.existsSync(file)){
+      let oldDoc=null;
+      try{oldDoc=JSON.parse(fs.readFileSync(file,'utf8'));}catch{}
+      if(oldDoc?.schemaVersion===VERSION&&Number.isFinite(oldDoc.savedAt)&&Array.isArray(oldDoc.rooms)){
+        const backup=file+'.bak',backupTmp=backup+'.tmp';
+        try{
+          const old=fs.readFileSync(file);
+          const backupFd=fs.openSync(backupTmp,'w',0o600);
+          try{fs.writeFileSync(backupFd,old);fs.fsyncSync(backupFd);}finally{fs.closeSync(backupFd);}
+          fs.renameSync(backupTmp,backup);
+          fs.chmodSync(backup,0o600);
+        }catch(e){try{fs.unlinkSync(backupTmp);}catch{}throw e;}
+      }
+    }
     fs.renameSync(tmp,file);
     try{const dirFd=fs.openSync(dir,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}catch{/* Some volumes do not support directory fsync. */}
   }catch(e){try{fs.unlinkSync(tmp);}catch{}throw e;}
