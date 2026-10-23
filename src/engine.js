@@ -9,41 +9,6 @@ const ERA_UPGRADES={
 };
 
 const fail=error=>({ok:false,error});
-const WEATHER_CARDS = Object.freeze([
- {id:'fair-winds',name:'Fair Winds',effect:'All island and trade income is doubled.'},
- {id:'storm',name:'Storm',effect:'No sea lanes earn Gold this round.'},
- {id:'doldrums',name:'Doldrums',effect:'Sea lanes cannot be charted this round.'},
- {id:'spice-fever',name:'Spice Fever',effect:'Spice market price is set to 4.'},
- {id:'silk-glut',name:'Silk Glut',effect:'Silk market price is set to 1.'},
- {id:'big-catch',name:'Big Catch',effect:'Fishing islands produce two Fish.'},
- {id:'pirate-sighting',name:'Pirate Sighting',effect:'Houses without Warships lose 1 Gold.'},
- {id:'royal-regatta',name:'Royal Regatta',effect:'The house with most lanes earns 1 Renown.'},
- {id:'fog',name:'Fog',effect:'Next round’s tide is concealed.'},
- {id:'calm-seas',name:'Calm Seas',effect:'No Raid orders can be executed.'},
- {id:'merchant-fleet',name:'Merchant Fleet',effect:'Market purchases have no Gold markup.'},
- {id:'king-tide',name:'King Tide',effect:'Two lane colours are at Low Tide.'}
-]);
-function advancedPerk(game,p,id){return game.mode==='advanced'&&p?.avatarId===id;}
-function lowTide(game,colour){return (game.lowTides||[game.tide]).includes(colour);}
-function drawWeather(game){
- if(game.mode!=='advanced')return null;
- if(!game.weatherDeck.length)game.weatherDeck=shuffle(WEATHER_CARDS.map(c=>c.id));
- const id=game.weatherDeck.pop();return WEATHER_CARDS.find(c=>c.id===id);
-}
-function chooseContracts(game,p,ids){
- if(game.phase!=='plan'||p.contractDrafted||!Array.isArray(ids)||ids.length!==2||new Set(ids).size!==2)return fail('Keep exactly two different Voyage Contracts.');
- const choices=[...(p.contracts||[]),...(p.contractReserve||[])];
- if(choices.length!==3||ids.some(id=>!choices.some(c=>c.id===id)))return fail('Those Voyage Contracts were not dealt to you.');
- const kept=choices.filter(c=>ids.includes(c.id));
- const discarded=choices.find(c=>!ids.includes(c.id));
- p.contracts=kept;p.contractReserve=[];p.contractDrafted=true;
- game.contractDeck.push(discarded);
- return {ok:true};
-}
-function finishContractDrafts(game,players){
- for(const p of players)if(!p.contractDrafted){const ids=p.contracts.map(c=>c.id);chooseContracts(game,p,ids);}
-}
-
 const own=(obj,key)=>Object.prototype.hasOwnProperty.call(obj,key);
 
 function chooseTide(previous,previousPrevious){
@@ -61,11 +26,11 @@ function newGame(players,mode){
     mode,phase:'placement',round:0,era:'Sail',chart,placementOrder,placementIndex:0,
     market:Object.fromEntries(GOODS.map(g=>[g,2])),tide:null,nextTide:chooseTide(null,null),previousTide:null,
     orders:{},submitted:{},deadline:null,rotation:0,winnerIds:[],marketSales:[],deals:[],dealSequence:0,trophies:{route:null,fleet:null},masterTrader:[],
-    battles:[],battleRound:null,battleSequence:0,contractDeck,navigatorId:players.find(p=>p.avatarId==='tobias')?.id||null,weatherDeck:shuffle(WEATHER_CARDS.map(c=>c.id)),weather:null,lowTides:[],history:['The Tidewater chart is unfurled. Captains, claim your first islands.']
+    contractDeck,history:['The Tidewater chart is unfurled. Captains, claim your first islands.']
   };
   for(const p of players){
     p.goods=Object.fromEntries(GOODS.map(g=>[g,1]));
-    p.gold=2;p.renown=0;p.placements=0;p.contracts=drawContracts(game,2);p.contractReserve=drawContracts(game,1);p.contractDrafted=false;p.completedContracts=0;p.upgrades=[];p.marketGoldEra=0;
+    p.gold=2;p.renown=0;p.placements=0;p.contracts=drawContracts(game,2);p.completedContracts=0;p.upgrades=[];p.marketGoldEra=0;
   }
   return game;
 }
@@ -122,43 +87,33 @@ function placeSettlement(game,players,playerId,tileId,now=Date.now()){
 function eraFor(game){return game.round<=(game.mode==='quick'?3:4)?'Sail':game.round<=(game.mode==='quick'?6:8)?'Cannon':'Steam';}
 
 function payIncome(game,players){
- const multiplier=game.weather?.id==='fair-winds'?2:1;
- for(const tile of game.chart.tiles){if(!tile.owner)continue;
-   const player=players.find(p=>p.id===tile.owner);if(!player)continue;
-   if(isProduction(tile)){
-     // Independent Big Catch and Fisherman bonuses both add one Fish.
-     const extra=(tile.type==='fish'&&game.weather?.id==='big-catch'?1:0)+(tile.type==='fish'&&advancedPerk(game,player,'finch')&&game.era==='Sail'?1:0);
-     player.goods[tile.type]+=(1+extra)*multiplier;
-   }else if(tile.type==='harbour')player.gold+=(tile.port?2:1)*multiplier;
- }
- for(const lane of game.chart.lanes){if(!lane.owner||game.weather?.id==='storm')continue;
-   const player=players.find(p=>p.id===lane.owner);if(!player)continue;
-   if(lowTide(game,lane.colour)&&!hasUpgrade(player,'trade-winds')){
-     if(!advancedPerk(game,player,'tobias')||player.navigatorUsedRound===game.round)continue;
-     player.navigatorUsedRound=game.round;game.navigatorUsedRound=game.round;
-   }
-   player.gold+=(1+(lane.from==='0,0'||lane.to==='0,0'?1:0))*multiplier;
- }
- const low=Math.min(...players.map(p=>p.renown));
- for(const p of players)if(p.renown===low)p.gold+=multiplier;
+  for(const tile of game.chart.tiles){if(!tile.owner)continue;
+    const player=players.find(p=>p.id===tile.owner);if(!player)continue;
+    if(isProduction(tile))player.goods[tile.type]++;
+    else if(tile.type==='harbour')player.gold+=tile.port?2:1;
+  }
+  for(const lane of game.chart.lanes){if(!lane.owner)continue;
+    const player=players.find(p=>p.id===lane.owner);if(player&&(lane.colour!==game.tide||hasUpgrade(player,'trade-winds')))player.gold+=1+(lane.from==='0,0'||lane.to==='0,0'?1:0);
+  }
+  const low=Math.min(...players.map(p=>p.renown));
+  for(const p of players)if(p.renown===low)p.gold++;
 }
+
 function beginRound(game,players,now=Date.now()){
- const priorEra=game.era;
- game.phase='plan';game.era=eraFor(game);
- if(priorEra!==game.era){for(const p of players){p.marketGoldEra=0;if(hasUpgrade(p,'privateers'))addWarships(game,p.id,1);}}
- game.tide=game.nextTide;game.nextTide=chooseTide(game.tide,game.previousTide);game.previousTide=game.tide;
- game.weather=drawWeather(game);game.lowTides=[game.tide];
- if(game.weather?.id==='king-tide')game.lowTides.push(TIDES.filter(t=>t!==game.tide)[randomInt(2)]);
- if(game.weather?.id==='spice-fever')game.market.spice=4;
- if(game.weather?.id==='silk-glut')game.market.silk=1;
- game.orders={};game.submitted={};game.deals=[];game.deadline=now+MODES[game.mode].planSeconds*1000;
- for(const p of players)if(!game.chart.tiles.some(t=>t.owner===p.id)){
-   const free=game.chart.tiles.filter(t=>t.owner===null&&['fish','timber','spice','silk','harbour','reef'].includes(t.type));
-   if(free.length){const t=free[randomInt(free.length)];t.owner=p.id;t.warships=0;if(t.type==='harbour')p.renown++;game.history.push(`${p.name} returns with a free settlement at ${t.name}.`);}
- }
- if(game.weather?.id==='pirate-sighting')for(const p of players)if(warshipCount(game,p.id)===0)p.gold=Math.max(0,p.gold-1);
- payIncome(game,players);
- game.history.push(`Round ${game.round}: ${game.lowTides.join(' & ')} Low Tide.${game.weather?' Weather: '+game.weather.name+'.':''} Income paid. Plot two secret orders.`);
+  const priorEra=game.era;
+  game.phase='plan';game.era=eraFor(game);
+  if(priorEra!==game.era){
+    for(const p of players){p.marketGoldEra=0;if(hasUpgrade(p,'privateers'))addWarships(game,p.id,1);}
+  }
+  game.tide=game.nextTide;game.nextTide=chooseTide(game.tide,game.previousTide);game.previousTide=game.tide;
+  game.orders={};game.submitted={};game.deals=[];game.deadline=now+MODES[game.mode].planSeconds*1000;
+  // A house is never permanently eliminated. The Admiralty grants one free vacant island.
+  for(const p of players)if(!game.chart.tiles.some(t=>t.owner===p.id)){
+    const free=game.chart.tiles.filter(t=>t.owner===null&&['fish','timber','spice','silk','harbour','reef'].includes(t.type));
+    if(free.length){const t=free[randomInt(free.length)];t.owner=p.id;t.warships=0;if(t.type==='harbour')p.renown++;game.history.push(`${p.name} returns with a free settlement at ${t.name}.`);}
+  }
+  payIncome(game,players);
+  game.history.push(`Round ${game.round}: ${game.tide} Low Tide. Income paid. Plot two secret orders.`);
 }
 function beginFirstRound(game,players,now=Date.now()){game.round=1;beginRound(game,players,now);}
 function resourcesEnough(p,cost){return Object.entries(cost).every(([g,v])=>(g==='gold'?p.gold:p.goods[g])>=v);}
@@ -167,9 +122,9 @@ function hasUpgrade(p,id){return !!p?.upgrades?.includes(id);}
 function addWarships(game,id,n){const home=game.chart.tiles.find(t=>t.owner===id);if(home)home.warships+=n;}
 function firstRoundOfEra(game){return game.round===(game.mode==='quick'?{Sail:1,Cannon:4,Steam:7}:{Sail:1,Cannon:5,Steam:9})[game.era];}
 function upgradeOptions(game,p){return game.phase==='plan'&&firstRoundOfEra(game)&&!p.upgrades?.some(id=>ERA_UPGRADES[game.era].some(c=>c.id===id))?ERA_UPGRADES[game.era]:[];}
-function chooseUpgrade(game,players,id,upgradeId,force=false){
+function chooseUpgrade(game,players,id,upgradeId){
  const p=players.find(x=>x.id===id);if(!p||!upgradeOptions(game,p).some(x=>x.id===upgradeId))return fail('That era upgrade is not available.');
- if(game.submitted[id]&&!force)return fail('Choose an upgrade before locking orders.');
+ if(game.submitted[id])return fail('Choose an upgrade before locking orders.');
  p.upgrades.push(upgradeId);if(upgradeId==='steam-packets'){game.steamPacketHolders??=[];game.steamPacketHolders.push(id);}
  if(upgradeId==='privateers')addWarships(game,id,2);
  if(upgradeId==='admiralty-house'){const port=game.chart.tiles.find(t=>t.owner===id&&t.port);if(port){port.admiraltyHouse=true;p.renown+=2;p.admiraltyAwarded=true;}}
@@ -209,7 +164,7 @@ function applyOrder(game,p,order,context){
   if(order.kind==='port'){
     const t=tileById(game,order.tileId);
     if(!t||t.owner!==p.id||t.type!=='harbour'||t.port)return fail('Choose one of your Harbour settlements without a Port.');
-    const portCost={...COST.port,silk:Math.max(0,COST.port.silk-(hasUpgrade(p,'deep-harbours')?1:0)-(advancedPerk(game,p,'mei-lin')?1:0))};
+    const portCost={...COST.port,silk:Math.max(0,COST.port.silk-(hasUpgrade(p,'deep-harbours')?1:0))};
     if(!resourcesEnough(p,portCost))return fail('Not enough Spice, Silk and Timber for a Port.');
     spend(p,portCost);t.port=true;p.renown+=2;
     if(hasUpgrade(p,'admiralty-house')&&!p.admiraltyAwarded){p.renown+=2;p.admiraltyAwarded=true;t.admiraltyHouse=true;}
@@ -218,20 +173,18 @@ function applyOrder(game,p,order,context){
   if(order.kind==='lane'){
     const l=laneById(game,order.laneId);
     if(!l||l.owner!==null)return fail('That sea lane is already claimed or missing.');
-    if(game.weather?.id==='doldrums')return fail('Doldrums prevent Chart Lane orders this round.');
-    if(lowTide(game,l.colour)&&!hasUpgrade(p,'steam-packets')){if(!advancedPerk(game,p,'tobias')||p.navigatorUsedRound===game.round)return fail('This sea lane is closed at Low Tide.');}
+    if(l.colour===game.tide&&!hasUpgrade(p,'steam-packets'))return fail('This sea lane is closed at Low Tide.');
     if(tileById(game,l.from)?.owner!==p.id&&tileById(game,l.to)?.owner!==p.id)return fail('A lane must touch one of your islands.');
-    const cost={timber:Math.max(0,l.segments-(hasUpgrade(p,'shipwrights')?1:0)-(advancedPerk(game,p,'hugo')?1:0)),silk:l.segments};if(!resourcesEnough(p,cost))return fail(`You need ${l.segments} Timber and ${l.segments} Silk.`);
-    spend(p,cost);l.owner=p.id;if(lowTide(game,l.colour)&&!hasUpgrade(p,'steam-packets')&&advancedPerk(game,p,'tobias')){p.navigatorUsedRound=game.round;game.navigatorUsedRound=game.round;}
+    const cost={timber:Math.max(0,l.segments-(hasUpgrade(p,'shipwrights')?1:0)),silk:l.segments};if(!resourcesEnough(p,cost))return fail(`You need ${l.segments} Timber and ${l.segments} Silk.`);
+    spend(p,cost);l.owner=p.id;
     return {ok:true,description:`${p.name} charts a ${l.colour} lane (${l.segments} segments).`};
   }
   if(order.kind==='warships'){
     if(!Number.isInteger(order.count)||order.count<1||order.count>3)return fail('Launch 1–3 Warships.');
     const t=tileById(game,order.tileId);
     if(!t||t.owner!==p.id)return fail('Warships must launch from your own island.');
-    const shipPrice=advancedPerk(game,p,'isadora')?1:2;
-    if(!resourcesEnough(p,{gold:shipPrice*order.count}))return fail('Not enough Gold to launch these Warships.');
-    spend(p,{gold:shipPrice*order.count});t.warships+=order.count;
+    if(!resourcesEnough(p,{gold:2*order.count}))return fail('Not enough Gold to launch these Warships.');
+    spend(p,{gold:2*order.count});t.warships+=order.count;
     return {ok:true,description:`${p.name} launches ${order.count} Warship${order.count>1?'s':''} at ${t.name}.`};
   }
   if(order.kind==='market'){
@@ -241,7 +194,7 @@ function applyOrder(game,p,order,context){
     const q=Object.fromEntries(GOODS.map(g=>[g,own(quantities,g)?quantities[g]:0]));
     if(Object.values(q).some(n=>!Number.isInteger(n)||n<0||n>10)||Object.values(q).reduce((a,b)=>a+b,0)>20)return fail('Select at most 20 goods, up to 10 of each type.');
     if(!Object.values(q).some(n=>n>0))return fail('Choose at least one good to trade.');
-    const cost=GOODS.reduce((n,g)=>n+q[g]*(order.direction==='buy'?market[g]+(game.weather?.id==='merchant-fleet'?0:1):Math.max(g==='fish'&&hasUpgrade(p,'fishmongers')?3:1,advancedPerk(game,p,'felix')?2:1,market[g])+(g==='spice'&&advancedPerk(game,p,'rosa')?1:0)),0);
+    const cost=GOODS.reduce((n,g)=>n+q[g]*(order.direction==='buy'?market[g]+1:g==='fish'&&hasUpgrade(p,'fishmongers')?Math.max(3,market[g]):market[g]),0);
     if(order.direction==='sell'){
       for(const g of GOODS)if(q[g]>p.goods[g])return fail(`Not enough ${g} to sell.`);
       for(const g of GOODS){p.goods[g]-=q[g];if(q[g]){sold.add(g);market[g]=Math.max(1,market[g]-1);}}
@@ -255,7 +208,7 @@ function applyOrder(game,p,order,context){
   if(order.kind==='explore'){
     if(context.explored?.has(p.id))return fail('Explore may only be used once per round.');
     if(!resourcesEnough(p,COST.explore))return fail('Explore needs 3 Gold and 1 Spice.');
-    if(!game.contractDeck.length&&!(context.players||[]).some(x=>x.contractReserve?.length))return fail('No Voyage Contracts remain to draw.');
+    if(!game.contractDeck.length)return fail('No Voyage Contracts remain to draw.');
     spend(p,COST.explore);context.explored?.add(p.id);
     const [contract]=drawContracts(game,1);p.contracts.push(contract);
     return {ok:true,description:`${p.name} explores new waters and draws a Voyage Contract.`};
@@ -269,7 +222,6 @@ function applyOrder(game,p,order,context){
     return {ok:true,description:`${p.name} makes a private trade offer.`};
   }
   if(order.kind==='raid'){
-    if(game.weather?.id==='calm-seas')return fail('Calm Seas prevent Raids this round.');
     const target=tileById(game,order.tileId);
     if(!target||!target.owner||target.owner===p.id||['sea','bazaar'].includes(target.type))return fail('Choose an enemy island to raid.');
     const sources=raidSources(game,p.id,target);
@@ -281,7 +233,7 @@ function applyOrder(game,p,order,context){
 }
 
 function cloneForDraft(game,players){
-  return {game:structuredClone({...game,orders:{},submitted:{}}),players:players.map(p=>({id:p.id,name:p.name,gold:p.gold,goods:{...p.goods},renown:p.renown,contracts:structuredClone(p.contracts||[]),contractReserve:structuredClone(p.contractReserve||[]),contractDrafted:p.contractDrafted,navigatorUsedRound:p.navigatorUsedRound,avatarId:p.avatarId,upgrades:[...(p.upgrades||[])],marketGoldEra:p.marketGoldEra||0,completedContracts:p.completedContracts||0}))};
+  return {game:structuredClone({...game,orders:{},submitted:{}}),players:players.map(p=>({id:p.id,name:p.name,gold:p.gold,goods:{...p.goods},renown:p.renown,contracts:structuredClone(p.contracts||[]),upgrades:[...(p.upgrades||[])],marketGoldEra:p.marketGoldEra||0,completedContracts:p.completedContracts||0}))};
 }
 
 function submitOrders(game,players,id,orders){
@@ -305,9 +257,7 @@ function everyoneSubmitted(game,players){return players.every(p=>game.submitted[
 function resolveRound(game,players,now=Date.now()){
   if(game.phase!=='plan')return fail('This round cannot be resolved.');
   expireDeals(game,Date.now(),true);
-  // The server assigns a legal fallback if a player missed the compulsory era draft.
-  for(const p of players){const available=upgradeOptions(game,p);if(available.length)chooseUpgrade(game,players,p.id,available[0].id,true);}
-  finishContractDrafts(game,players);
+  // Unchosen upgrades are not auto-awarded: the phone offers a clear opt-in choice at the first planning phase of each era.
   game.phase='reveal';const prices={...game.market},sold=new Set(),raids=[],explored=new Set();
   const ordered=[...players.slice(game.rotation),...players.slice(0,game.rotation)];
   for(const p of ordered){
@@ -321,7 +271,6 @@ function resolveRound(game,players,now=Date.now()){
     }
   }
   resolveRaids(game,players,raids);
-  if(game.weather?.id==='royal-regatta'){const most=Math.max(...players.map(p=>laneCount(game,p.id)));if(most>0)for(const p of players)if(laneCount(game,p.id)===most){p.renown++;game.history.push(`⛵ ${p.name} wins the Royal Regatta (+1 Renown).`);}}
   for(const good of GOODS)if(!sold.has(good))prices[good]=Math.min(4,prices[good]+1);
   game.market=prices;game.marketSales=[...sold];
   awardContracts(game,players);
@@ -329,8 +278,7 @@ function resolveRound(game,players,now=Date.now()){
   if(eraEnds(game)){awardMasterTrader(game,players);}
   game.history.push(`Round ${game.round} resolved. Market: ${GOODS.map(g=>`${g} ${prices[g]}`).join(' · ')}.`);
   const threshold=MODES[game.mode].winAt;
-  if(players.some(p=>p.renown-(game.mode==='advanced'?(p.contracts||[]).filter(c=>!c.completed).length:0)>=threshold)||game.round>=MODES[game.mode].rounds){
-    if(game.mode==='advanced')for(const p of players){const unfinished=(p.contracts||[]).filter(c=>!c.completed).length;p.renown=Math.max(0,p.renown-unfinished);game.history.push(`${p.name}: ${unfinished} unfinished contracts (−${unfinished} Renown).`);}
+  if(players.some(p=>p.renown>=threshold)||game.round>=MODES[game.mode].rounds){
     const max=Math.max(...players.map(p=>p.renown));
     const finalists=players.filter(p=>p.renown===max).sort((a,b)=>b.gold-a.gold||laneCount(game,b.id)-laneCount(game,a.id));
     const best=finalists[0];game.winnerIds=finalists.filter(p=>p.gold===best.gold&&laneCount(game,p.id)===laneCount(game,best.id)).map(p=>p.id);
@@ -350,9 +298,9 @@ function legalTargets(game,id){
   return {
     settle:game.chart.tiles.filter(t=>t.owner===null&&['fish','timber','spice','silk','harbour','reef'].includes(t.type)&&canSettle(game,id,t)).map(t=>t.id),
     port:owned.filter(t=>t.type==='harbour'&&!t.port).map(t=>t.id),
-    lane:game.chart.lanes.filter(l=>l.owner===null&&game.weather?.id!=='doldrums'&&(!lowTide(game,l.colour)||game.steamPacketHolders?.includes(id)||(game.mode==='advanced'&&id&&game.navigatorId===id&&game.navigatorUsedRound!==game.round))&&(owned.some(t=>t.id===l.from||t.id===l.to))).map(l=>l.id),
+    lane:game.chart.lanes.filter(l=>l.owner===null&&(l.colour!==game.tide||game.steamPacketHolders?.includes(id))&&(owned.some(t=>t.id===l.from||t.id===l.to))).map(l=>l.id),
     warships:owned.map(t=>t.id),
-    raid:game.chart.tiles.filter(t=>game.weather?.id!=='calm-seas'&&t.owner&&t.owner!==id&&raidSources(game,id,t).length).map(t=>t.id)
+    raid:game.chart.tiles.filter(t=>t.owner&&t.owner!==id&&raidSources(game,id,t).length).map(t=>t.id)
   };
 }
 
@@ -360,124 +308,39 @@ function publicGame(game){if(!game)return null;
   return {mode:game.mode,phase:game.phase,round:game.round,rounds:MODES[game.mode].rounds,winAt:MODES[game.mode].winAt,
     era:game.era,chart:game.chart,placementIndex:game.placementIndex,placementTotal:game.placementOrder.length,
     currentPlacer:currentPlacer(game),legalPlacements:game.phase==='placement'?legalPlacements(game):[],
-    market:game.market,tide:game.tide,lowTides:game.lowTides,weather:game.weather,nextTide:game.weather?.id==='fog'?null:game.nextTide,deadline:game.deadline,
-    submittedIds:Object.keys(game.submitted),winnerIds:game.winnerIds,history:game.history.slice(-14),battles:game.battles||[],battleRound:game.battleRound,battleSequence:game.battleSequence||0,contractDeckCount:game.contractDeck.length,trophies:game.trophies,masterTrader:game.masterTrader};
+    market:game.market,tide:game.tide,nextTide:game.nextTide,deadline:game.deadline,
+    submittedIds:Object.keys(game.submitted),winnerIds:game.winnerIds,history:game.history.slice(-14),contractDeckCount:game.contractDeck.length,trophies:game.trophies,masterTrader:game.masterTrader};
 }
 
-/**
- * Resolve all end-of-round raids against one common board snapshot.
- * Each ship may commit to at most one raid. All contenders for an island
- * roll once and contest it together; the defending house wins ties.
- * rollDie is injectable to make combat outcomes reproducible in tests.
- */
-function resolveRaids(game,players,raids,rollDie=()=>randomInt(6)+1){
-  game.battles=[];
-  if(!raids.length)return [];
-  const originals=new Map(game.chart.tiles.map(t=>[t.id,{owner:t.owner,warships:t.warships,port:t.port,type:t.type}]));
-  const committed=new Set(),sourceCounts=new Map(),engagements=new Map();
-  const byPlayer=new Map(players.map(p=>[p.id,p]));
-  let failed=0;
+function resolveRaids(game,players,raids){
   for(const raid of raids){
-    const target=tileById(game,raid.targetId),original=originals.get(raid.targetId);
-    if(!target||!original?.owner||original.owner===raid.attackerId)continue;
-    const sources=[...new Set(raid.sourceIds)].map(id=>tileById(game,id)).filter(t=>
-      t&&!committed.has(t.id)&&originals.get(t.id)?.owner===raid.attackerId&&
-      originals.get(t.id).warships>0&&distance(t,target)===1);
-    if(!sources.length){
-      const captain=byPlayer.get(raid.attackerId);
-      if(captain)captain.gold++;
-      game.history.push(`${captain?.name||'A captain'}: raid on ${target.name} could not sail; fleet already committed (+1 Gold).`);
-      failed++;
-      continue;
-    }
-    let group=engagements.get(target.id);
-    if(!group){group={target,defenderId:original.owner,attacks:new Map()};engagements.set(target.id,group);}
-    let attack=group.attacks.get(raid.attackerId);
-    if(!attack){attack={playerId:raid.attackerId,ships:0,sources:[]};group.attacks.set(raid.attackerId,attack);}
-    for(const source of sources){
-      committed.add(source.id);
-      const amount=originals.get(source.id).warships;
-      sourceCounts.set(source.id,amount);
-      attack.ships+=amount;
-      attack.sources.push({id:source.id,ships:amount});
-    }
-  }
-  // Sail every committed fleet before deciding any winner; a defending island
-  // can also have launched a raid and must not use those same ships for defence.
-  for(const [id,count] of sourceCounts){const tile=tileById(game,id);tile.warships=Math.max(0,tile.warships-count);}
-  const pendingReturn=[];
-  const results=[];
-  const roll=(captain)=>{
-    const first=rollDie();
-    if(!Number.isInteger(first)||first<1||first>6)throw Error('Combat die must be 1–6');
-    const second=advancedPerk(game,captain,'nyla')?rollDie():null;
-    if(second!==null&&(!Number.isInteger(second)||second<1||second>6))throw Error('Combat die must be 1–6');
-    return {dice:second===null?[first]:[first,second],value:second===null?first:Math.max(first,second)};
-  };
-  // All decisions use the same original ownership; no captured tile can be
-  // reused as a fresh launch point during the same round.
-  for(const group of engagements.values()){
-    const {target,defenderId}=group,defender=byPlayer.get(defenderId);
-    const defenderShips=Math.max(0,originals.get(target.id).warships-(sourceCounts.get(target.id)||0));
-    const bonus=(target.type==='reef'?1:0)+(target.port?1:0)+(hasUpgrade(defender,'coastal-forts')?1:0);
-    const defDie=roll(defender),defStrength=defenderShips+bonus+defDie.value;
-    const attackers=[...group.attacks.values()].map(a=>{
-      const captain=byPlayer.get(a.playerId),die=roll(captain);
-      return {...a,dice:die.dice,strength:a.ships+die.value};
-    });
-    const highest=Math.max(...attackers.map(a=>a.strength));
-    const leaders=attackers.filter(a=>a.strength===highest);
-    const victor=(highest>defStrength&&leaders.length===1)?leaders[0]:null;
-    const captured=!!victor;
-    const defenderLosses=captured?Math.ceil(defenderShips/2):Math.min(1,defenderShips);
-    const attackerReports=[];
-    for(const attack of attackers){
-      const lost=attack.playerId===victor?.playerId?Math.min(1,attack.ships):Math.ceil(attack.ships/2);
-      const surviving=attack.ships-lost;
-      if(attack!==victor&&surviving)pendingReturn.push({playerId:attack.playerId,count:surviving,origin:target.id,sources:attack.sources.map(s=>s.id)});
-      attackerReports.push({playerId:attack.playerId,ships:attack.ships,dice:attack.dice,strength:attack.strength,losses:lost});
-    }
-    if(captured&&defenderShips-defenderLosses>0)pendingReturn.push({playerId:defenderId,count:defenderShips-defenderLosses,origin:target.id,sources:[]});
-    results.push({round:game.round,targetId:target.id,targetName:target.name,defenderId,
-      defender:{playerId:defenderId,ships:defenderShips,dice:defDie.dice,bonus,strength:defStrength,losses:defenderLosses},
-      attackers:attackerReports,winnerId:captured?victor.playerId:defenderId,outcome:captured?'captured':'defended',
-      winningShips:captured?victor.ships-1:Math.max(0,defenderShips-defenderLosses),
-      strandedShips:0});
-  }
-  // Apply all ownership changes only after every battle has been scored.
-  for(const result of results){
-    const target=tileById(game,result.targetId);
-    if(result.outcome==='captured'){
-      const loser=byPlayer.get(result.defenderId),winner=byPlayer.get(result.winnerId);
+    const target=tileById(game,raid.targetId);if(!target||!target.owner||target.owner===raid.attackerId)continue;
+    const sources=raid.sourceIds.map(id=>tileById(game,id)).filter(t=>t&&t.owner===raid.attackerId&&t.warships>0&&distance(t,target)===1);
+    const attackShips=sources.reduce((n,t)=>n+t.warships,0);if(!attackShips)continue;
+    const defenderId=target.owner,defenderShips=target.warships;
+    const attackRoll=randomInt(6)+1,defendRoll=randomInt(6)+1;
+    const defendBonus=(target.type==='reef'?1:0)+(target.port?1:0)+(hasUpgrade(players.find(p=>p.id===defenderId),'coastal-forts')?1:0);
+    const attackStrength=attackShips+attackRoll,defendStrength=defenderShips+defendBonus+defendRoll;
+    for(const source of sources)source.warships=0;
+    const attacker=players.find(p=>p.id===raid.attackerId),defender=players.find(p=>p.id===defenderId);
+    if(attackStrength>defendStrength){
+      target.owner=raid.attackerId;target.warships=Math.max(0,attackShips-1);
       if(target.type==='harbour'){
-        const value=1+(target.port?2:0)+(target.admiraltyHouse?2:0);
-        if(loser)loser.renown=Math.max(0,loser.renown-value);
-        if(winner)winner.renown+=value;
+        const points=1+(target.port?2:0)+(target.admiraltyHouse?2:0);
+        defender.renown=Math.max(0,defender.renown-points);attacker.renown+=points;
       }
-      target.owner=result.winnerId;
+      game.history.push(`⚔ ${attacker?.name||'Attacker'} captures ${target.name} from ${defender?.name||'the defender'} (${attackStrength} vs ${defendStrength}).`);
+    }else{
+      redistributeShips(sources,Math.max(0,attackShips-Math.ceil(attackShips/2)));
+      target.warships=Math.max(0,target.warships-1);
+      game.history.push(`🛡 ${defender?.name||'The defender'} repels a raid on ${target.name} (${defendStrength} vs ${attackStrength}).`);
     }
-    target.warships=result.winningShips;
   }
-  // Returning fleets use still-friendly home islands. If their original
-  // island was captured, the nearest surviving friendly island takes them.
-  for(const returnee of pendingReturn){
-    const origin=tileById(game,returnee.origin);
-    const owned=game.chart.tiles.filter(t=>t.owner===returnee.playerId);
-    const home=returnee.sources.map(id=>tileById(game,id)).find(t=>t.owner===returnee.playerId)||
-      owned.sort((a,b)=>distance(a,origin)-distance(b,origin)||a.id.localeCompare(b.id))[0];
-    if(home)home.warships+=returnee.count;
-    else {const report=results.find(x=>x.targetId===returnee.origin);if(report)report.strandedShips+=returnee.count;}
-  }
-  for(const r of results){
-    const attackers=r.attackers.map(a=>byPlayer.get(a.playerId)?.name||'Captain').join(' and ');
-    const winner=byPlayer.get(r.winnerId)?.name||'A captain';
-    game.history.push(r.outcome==='captured'?`⚔ ${winner} captures ${r.targetName} from ${byPlayer.get(r.defenderId)?.name||'a rival'} (naval battle against ${attackers}).`:
-      `🛡 ${winner} defends ${r.targetName} against ${attackers}.`);
-  }
-  game.battles=results;
-  game.battleRound=game.round;
-  game.battleSequence=(game.battleSequence||0)+1;
-  return results;
+}
+
+function redistributeShips(sources,count){
+  let i=0;
+  while(count>0&&sources.length){sources[i%sources.length].warships++;count--;i++;}
 }
 
 function awardContracts(game,players){
@@ -566,4 +429,4 @@ function awardMasterTrader(game,players){
 function titleCase(text){return text.charAt(0).toUpperCase()+text.slice(1);}
 
 module.exports={newGame,chooseTide,currentPlacer,legalPlacements,placeSettlement,publicGame,beginFirstRound,
-  payIncome,beginRound,submitOrders,resolveRound,everyoneSubmitted,applyOrder,canSettle,legalTargets,drawContracts,chooseUpgrade,upgradeOptions,expireDeals,pendingDeals,answerDeal,longestRoute,updateTrophies,resolveRaids,ERA_UPGRADES,WEATHER_CARDS,chooseContracts,lowTide};
+  payIncome,beginRound,submitOrders,resolveRound,everyoneSubmitted,applyOrder,canSettle,legalTargets,drawContracts,chooseUpgrade,upgradeOptions,expireDeals,pendingDeals,answerDeal,longestRoute,updateTrophies,ERA_UPGRADES};

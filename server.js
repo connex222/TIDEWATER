@@ -5,7 +5,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const WebSocket=require('ws');
 const {CAPTAINS,MODES,randomInt}=require('./src/constants');
-const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,applyOrder,chooseUpgrade,upgradeOptions,chooseContracts,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
+const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,chooseUpgrade,upgradeOptions,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
 const {qrSvg}=require('./src/qr');
 const PORT=Number(process.env.PORT)||3000;
 const PUBLIC=path.resolve(__dirname,'public');
@@ -25,7 +25,7 @@ function publish(room){
   const data=roomPublic(room);
   send(room.host,{type:'state',room:data,host:true});
   for(const p of room.players){
-    send(p.ws,{type:'state',room:data,self:{id:p.id,avatarId:p.avatarId,goods:p.goods||null,gold:p.gold??null,renown:p.renown??0,contracts:p.contracts||[],contractReserve:p.contractDrafted?[]:p.contractReserve||[],contractDrafted:!!p.contractDrafted,completedContracts:p.completedContracts||0,orders:room.game?.orders[p.id]||null,submitted:!!room.game?.submitted[p.id],legalTargets:legalTargets(room.game,p.id),upgrades:p.upgrades||[],upgradeOptions:room.game?upgradeOptions(room.game,p):[],deals:room.game?.deals.filter(d=>d.fromId===p.id||d.toId===p.id).map(d=>({id:d.id,fromId:d.fromId,toId:d.toId,give:d.give,receive:d.receive,status:d.status,expiresAt:d.expiresAt}))||[]}});
+    send(p.ws,{type:'state',room:data,self:{id:p.id,avatarId:p.avatarId,goods:p.goods||null,gold:p.gold??null,renown:p.renown??0,contracts:p.contracts||[],completedContracts:p.completedContracts||0,orders:room.game?.orders[p.id]||null,submitted:!!room.game?.submitted[p.id],legalTargets:legalTargets(room.game,p.id),upgrades:p.upgrades||[],upgradeOptions:room.game?upgradeOptions(room.game,p):[],deals:room.game?.deals.filter(d=>d.fromId===p.id||d.toId===p.id).map(d=>({id:d.id,fromId:d.fromId,toId:d.toId,give:d.give,receive:d.receive,status:d.status,expiresAt:d.expiresAt}))||[]}});
   }
 }
 function record(room,text){if(room.game){room.game.history.push(text);room.game.history=room.game.history.slice(-30);}}
@@ -79,57 +79,19 @@ function runBotPlacement(room){
     placeSettlement(room.game,room.players,player.id,choices[randomInt(choices.length)]);
   }
 }
-/** Candidate-driven AI: chooses up to two actually affordable legal orders.
- * Rules are checked on a disposable clone; no private player information is used.
- * Each captain's preference is deliberately distinct, not a claim of optimal play.
- */
 function botOrders(game,p){
-  const targets=legalTargets(game,p.id);
   const owned=game.chart.tiles.filter(t=>t.owner===p.id);
-  const tile=id=>game.chart.tiles.find(t=>t.id===id);
-  const lane=id=>game.chart.lanes.find(l=>l.id===id);
-  const outgoing=[];
-  // An enemy with a weak garrison is a valid tactical target.
-  const raids=targets.raid.map(id=>tile(id)).filter(t=>t&&owned.filter(o=>o.warships>0&&Math.max(Math.abs(o.q-t.q),Math.abs(o.r-t.r),Math.abs(o.q+o.r-t.q-t.r))===1).reduce((n,o)=>n+o.warships,0)>=t.warships+2);
-  const settles=targets.settle.map(tile).filter(Boolean).sort((a,b)=>{
-    const score=t=>(t.type==='harbour'?12:0)+(['fish','timber'].includes(t.type)?6:0)+((p.goods[t.type]||0)<2?2:0);
-    return score(b)-score(a);
-  });
-  const ports=targets.port.map(tile).filter(Boolean);
-  const lanes=targets.lane.map(lane).filter(Boolean).sort((a,b)=>a.segments-b.segments);
-  const marketOrders=['spice','silk','fish','timber'].filter(g=>p.goods[g]>=(['spice','silk'].includes(g)?2:4)).map(g=>({kind:'market',direction:'sell',quantities:{[g]:Math.min(3,p.goods[g]-(['fish','timber'].includes(g)?2:0))}}));
-  const buy=()=>({kind:'market',direction:'buy',quantities:{fish:p.goods.fish<1?1:0,timber:p.goods.timber<1?1:0}});
-  const constructs=[...settles.slice(0,5).map(t=>({kind:'settle',tileId:t.id})),...ports.map(t=>({kind:'port',tileId:t.id})),...lanes.slice(0,5).map(l=>({kind:'lane',laneId:l.id}))];
-  const ships=owned.map(t=>({kind:'warships',tileId:t.id,count:p.gold>=6?3:1}));
-  const combat=raids.map(t=>({kind:'raid',tileId:t.id}));
-  const exploration=game.contractDeck.length?[{kind:'explore'}]:[];
-  const categories={
-    isadora:[combat,ships,constructs,marketOrders,exploration],
-    tobias:[lanes.map(l=>({kind:'lane',laneId:l.id})),constructs,marketOrders,ships,combat],
-    rosa:[marketOrders,constructs,exploration,ships,combat],
-    finch:[constructs,marketOrders,exploration,combat,ships],
-    'mei-lin':[ports.map(t=>({kind:'port',tileId:t.id})),constructs,marketOrders,exploration,ships],
-    hugo:[lanes.map(l=>({kind:'lane',laneId:l.id})),constructs,marketOrders,ships,combat],
-    nyla:[combat,ships,constructs,marketOrders,exploration],
-    felix:[marketOrders,constructs,exploration,ships,combat]
-  };
-  outgoing.push(...(categories[p.avatarId]||[constructs,marketOrders,ships,combat,exploration]).flat());
-  if(p.goods.fish<1||p.goods.timber<1)outgoing.push(buy());
-  outgoing.push({kind:'hold'});
-  const clone=structuredClone({...game,orders:{},submitted:{}});
-  const captain=structuredClone({id:p.id,name:p.name,avatarId:p.avatarId,gold:p.gold,goods:p.goods,renown:p.renown,
-    contracts:p.contracts||[],contractReserve:p.contractReserve||[],upgrades:p.upgrades||[],marketGoldEra:p.marketGoldEra||0});
-  const context={market:{...clone.market},sold:new Set(),raids:[],explored:new Set(),players:[captain],dealOrders:new Set()};
-  const chosen=[];
-  for(const order of outgoing){
-    if(chosen.length===2)break;
-    // Do not let novice AI double-commit a fleet to two different raids.
-    if(order.kind==='raid'&&chosen.some(x=>x.kind==='raid'))continue;
-    const result=applyOrder(clone,captain,order,context);
-    if(result.ok){chosen.push(order);if(order.kind==='hold')break;}
-  }
-  while(chosen.length<2)chosen.push({kind:'hold'});
-  return chosen;
+  const free=game.chart.tiles.find(t=>t.owner===null&&['harbour','fish','timber','spice','silk','reef'].includes(t.type)&&canSettle(game,p.id,t));
+  if(free&&p.goods.fish>0&&p.goods.timber>0)return [{kind:'settle',tileId:free.id},{kind:'hold'}];
+  const port=owned.find(t=>t.type==='harbour'&&!t.port);
+  if(port&&p.goods.spice>=2&&p.goods.silk>=2&&p.goods.timber>=1)return [{kind:'port',tileId:port.id},{kind:'hold'}];
+  const first=game.chart.lanes.find(l=>l.owner===null&&l.colour!==game.tide&&
+    owned.some(t=>t.id===l.from||t.id===l.to)&&p.goods.timber>=l.segments&&p.goods.silk>=l.segments);
+  if(first)return [{kind:'lane',laneId:first.id},{kind:'hold'}];
+  const marketGood=['spice','silk','fish','timber'].find(g=>p.goods[g]>=2);
+  if(marketGood)return [{kind:'market',direction:'sell',quantities:{[marketGood]:1}},{kind:'hold'}];
+  if(owned.length&&p.gold>=2)return [{kind:'warships',tileId:owned[0].id,count:1},{kind:'hold'}];
+  return [{kind:'hold'},{kind:'hold'}];
 }
 function progressPlanning(room,now=Date.now()){
   if(!room.game||room.game.phase!=='plan')return;
@@ -165,7 +127,7 @@ function processAction(ws,msg){
   const room=rooms.get(ws.roomCode||'');if(!room)return error(ws,'Join a room first.');
   if(msg.type==='set_mode'){
     if(ws.kind!=='host'||room.game)return error(ws,'Only the host can select a mode in the lobby.');
-    if(!MODES[msg.mode])return error(ws,'Unknown mode.');room.mode=msg.mode;publish(room);return;
+    if(!MODES[msg.mode])return error(ws,'Unknown mode.');if(msg.mode==='advanced')return error(ws,'Advanced mode is coming in a later phase: Weather, perks and contracts are not yet ready.');room.mode=msg.mode;publish(room);return;
   }
   if(msg.type==='ready'){
     if(ws.kind!=='player'||room.game)return error(ws,'Ready status can only change in the lobby.');
@@ -206,13 +168,6 @@ function processAction(ws,msg){
     const result=placeSettlement(room.game,room.players,ws.playerId,msg.tileId);
     if(!result.ok)return error(ws,result.error);runBotPlacement(room);progressPlanning(room);publish(room);return;
   }
-  if(msg.type==='choose_contracts'){
-    if(ws.kind!=='player'||!room.game)return error(ws,'Only a captain may select Voyage Contracts.');
-    const p=room.players.find(p=>p.id===ws.playerId);
-    if(!p||p.bot||p.ws!==ws||room.game.phase!=='plan'||room.game.submitted[p.id])return error(ws,'Finish the draft before locking orders.');
-    const result=chooseContracts(room.game,p,msg.contractIds);
-    if(!result.ok)return error(ws,result.error);publish(room);return;
-  }
   if(msg.type==='choose_upgrade'){
     if(ws.kind!=='player'||!room.game)return error(ws,'Only a captain may select an upgrade.');
     const p=room.players.find(p=>p.id===ws.playerId);if(!p||p.bot||p.ws!==ws)return error(ws,'Not your active captain session.');
@@ -242,7 +197,7 @@ function processAction(ws,msg){
   return error(ws,'Unknown action or not available in this phase.');
 }
 const ROUTES=new Map([['/','tv.html'],['/tv.html','tv.html'],['/phone.html','phone.html']]);
-const MIME={'.html':'text/html; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml; charset=utf-8','.webp':'image/webp','.woff2':'font/woff2','.ogg':'audio/ogg','.mp3':'audio/mpeg'};
+const MIME={'.html':'text/html; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml; charset=utf-8','.webp':'image/webp','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
   try{
     const url=new URL(req.url,'http://localhost');
@@ -255,14 +210,11 @@ const server=http.createServer((req,res)=>{
       const joinUrl=`${protocol}://${host}/phone.html?room=${code}`;
       const svg=qrSvg(joinUrl);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(svg);return;
     }
-    if(url.pathname.startsWith('/art/')||url.pathname.startsWith('/audio/')){
-      const kind=url.pathname.startsWith('/audio/')?'audio':'art';
+    if(url.pathname.startsWith('/art/')){
       const asset=path.resolve(PUBLIC,'.'+url.pathname);
-      const root=path.join(PUBLIC,kind)+path.sep;
-      if(!asset.startsWith(root)||!fs.existsSync(asset)||!fs.statSync(asset).isFile()){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
+      if(!asset.startsWith(path.join(PUBLIC,'art'))||!fs.existsSync(asset)){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
       const ext=path.extname(asset).toLowerCase();
-      res.writeHead(200,{'Content-Type':MIME[ext]||'application/octet-stream','Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'});
-      if(req.method==='HEAD'){res.end();return;}
+      res.writeHead(200,{'Content-Type':MIME[ext]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
       fs.createReadStream(asset).pipe(res);return;
     }
     const file=ROUTES.get(url.pathname);if(!file){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
@@ -294,5 +246,5 @@ const planningClock=setInterval(()=>{
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000)rooms.delete(code);}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 7 serving on http://localhost:${PORT}`));}
-module.exports={server,wss,rooms,processAction,botOrders};
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 4 serving on http://localhost:${PORT}`));}
+module.exports={server,wss,rooms,processAction};
