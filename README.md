@@ -1,8 +1,19 @@
-# TIDEWATER — Phase 5 (v0.5.0)
+# TIDEWATER — Phase 7 (v0.7.0)
 
 **TV-hosted, phone-controlled, server-authoritative island trading game.**
 
-Phase 5 builds on Phase 4 diplomacy and trophies. It enables Advanced mode with twelve distinct Weather events, eight active captain perks, a choose-two-of-three Voyage Contract draft and a compulsory era upgrade that defaults safely if a player does not choose before Reveal. The approved WebP artwork is retained. The original `SPECIFICATION.md` is retained unchanged as the **authoritative design specification**.
+Phase 7 builds on the naval-combat release with bundled original maritime soundtrack and sound cues, separate opt-in TV and phone audio controls, stronger computer captains, clearer Renown progress and a scripted strategy balance probe. The approved WebP artwork and original `SPECIFICATION.md` are retained unchanged.
+
+## What changed in Phase 7
+
+- **Audio:** a 20-second looping instrumental theme and eight original sound effects, each bundled in `.mp3` and `.ogg`. Both screens remain muted until a user enables audio. The host can control music, effects and volume independently; phone sound is optional. See `SOUND-DESIGN.md` for asset/production details. These are **procedural digital compositions**, not plugin-generated or professionally recorded audio.
+- **Smarter AI:** captain-specific ordering priorities, two legal planned actions when affordable, a simulation pass to avoid overspending, conservative avoidance of committing the same fleet twice. No human player's private orders are consulted.
+- **TV / phone usability:** accessible Renown-to-goal indicators, shorter board notation explaining patterned sea lanes, larger TV safe margin on common widescreen sizes, and a collapsible phone order reference.
+- **Game balance research:** `BALANCE-REPORT.md` and `BALANCE-REPORT.json` document **960 artificial full voyages (320 Quick, 320 Standard, 320 Advanced)**. The sample did not show navy-only domination, but **Renown was generally low**. The rules, starting resources and victory thresholds have not been changed without user approval. These bots do not model expert human behaviour.
+- **QA:** the existing 67 regression tests plus 4 new audio/security/UI/bot tests: **71 automated tests passed**. Actual mobile/TV browser multiplayer testing is still pending.
+
+To repeat a fresh smaller tournament, use `npm run balance`. The sound files are ready to play without Python, but `python tools/generate_audio.py` can regenerate them during development with `numpy`, `scipy` and `ffmpeg`.
+
 
 ## Requirements
 
@@ -40,7 +51,7 @@ If using separate devices on a home network, use the host PC's local IP address 
 | Chart Lane | 1 Timber + 1 Silk **per segment** | Claim a complete, available lane which touches an owned island. Closed at Low Tide. |
 | Launch Warships | 2 Gold each, 1–3 in an order | Station on an owned island. |
 | Explore | 3 Gold + 1 Spice | Draw 1 Voyage Contract from the remaining deck. One successful Explore per captain per round. |
-| Raid | Free order slot | Attack an adjacent enemy island using all adjacent Warships. Defender wins ties; Reefs and Ports improve defence. |
+| Raid | Free order slot | Commit adjacent Warships to a simultaneous end-of-round battle. Defenders win ties; Reefs, Ports and Coastal Forts improve defence. |
 | Go to Market | Free order slot; payment for purchases | Buy goods for displayed price +1 per unit, or sell at the current price. Multiple goods per order (up to 10 of each / 20 total). |
 | Offer a Deal | Free order slot | Propose a private exchange of goods and/or Gold to another captain. Recipient accepts or declines within up to 20 seconds. |
 | Hold Position | Free | No action, using one of the two order slots. |
@@ -51,7 +62,7 @@ The Phone highlights candidate expansion islands; the server checks adjacency, c
 
 Market prices start at **2**. Every sell order reducing a particular good's price lowers the current price for later orders in that round by **1**, minimum 1. The market board publishes the new prices at the end of Reveal. Unsold goods rise by 1 (maximum 4). Buying does not alter prices. Trade purchases cost price **+1** for each unit. This is the current implementation interpretation of potentially ambiguous market wording in the specification.
 
-### Scoring in Phase 5
+### Scoring (current build)
 
 - Claiming a Harbour earns **1 Renown**.
 - Upgrading that Harbour to a Port earns **an additional 2 Renown**.
@@ -86,7 +97,7 @@ The **Quick** Era timeline is 3 Sail / 3 Cannon / 2 Steam rounds; **Standard** i
 | Cannon | Deep Harbours / Trade Winds / Coastal Forts | Discount Silk when building Ports / earn lane income despite Low Tide / +1 defence to owned islands |
 | Steam | Steam Packets / Admiralty House / Chamber of Commerce | Chart during Low Tide / first owned Port gains +2 Renown / +1 per completed Voyage Contract |
 
-Raid capture now transfers the ownership-related Renown of Harbours and Ports. A house with no islands automatically receives a free vacant settlement at the start of the following round when a legal unclaimed tile exists.
+Raid capture transfers the ownership-related Renown of Harbours and Ports. A house with no islands automatically receives a free vacant settlement at the start of the following round when a legal unclaimed tile exists.
 
 ## Render deployment
 
@@ -100,7 +111,7 @@ Run `npm test`. The suite covers game rules, trading privacy, server authorisati
 
 **Testing limitation in this delivery environment:** the `ws` dependency is not available in the local npm cache, so live end-to-end testing through real browser WebSocket connections could not be completed here. The automated protocol tests use a mock transport. Do not treat this as confirmation that the full multi-device application is production-ready.
 
-## Phase 5 — Advanced Weather and perks
+## Phase 5 — Advanced Weather and perks (retained)
 
 - **Quick and Standard:** Weather events and avatar abilities stay disabled.
 - **Advanced:** each round draws one Weather card without repeats until all twelve have been used. All weather is public, although Fog hides the following round's tide preview.
@@ -117,15 +128,32 @@ Run `npm test`. The suite covers game rules, trading privacy, server authorisati
 - **Multiplayer acceptance testing** on TV, PC and mobile devices, including game reconnects, Weather/tide transitions, AI fill-ins and timing races, is still required.
 - **Durable server storage** is still absent; a restart loses live rooms.
 - **Simultaneous raid fairness and richer battle presentation** remain future improvements.
-- **Audio** is still the basic Web Audio feedback, not a professionally produced sound package.
+- **Audio** now includes original bundled digital soundtrack and effects, but naturalistic/studio-quality recorded audio has not yet been commissioned.
 - **Avatar art** covers eight neutral Sail-era portraits; Cannon/Steam outfits and additional expressions are still outstanding.
 - **Design decisions needing approval:** exact two-contract choice, Weather tie handling, fallback era upgrade order and Nyla's higher-of-two dice interpretation.
 
 ## Security/architecture
 
-- Server is authoritative for the implemented Phase 5 rules, private deals, upgrades, trophies, resources, prices, round timing and resolution.
+- Server is authoritative for the implemented rules, simultaneous combat, private deals, upgrades, trophies, resources, prices, round timing and resolution.
 - Player inventory, locked order details and credentials are not broadcast to the TV or other phones. Deal details are shown only to their sender and recipient; the shared state exposes only order-ready status.
 - Authenticated session tokens allow rejoining a seat; secrets are not broadcast. Host-only controls are checked on the server.
 - HTML/CSS/JS self-contained under `public/`, no runtime CDN; only the same-origin WebSocket is required.
 
 Refer to `SPECIFICATION.md` for the eventual complete rules and `CHANGELOG.md` for what changed.
+
+
+## Phase 6 — simultaneous naval combat
+
+The server gathers every valid Raid during the Reveal and resolves them against **one frozen pre-battle map**. This corrects an older flaw in which a fleet could be used twice or a captured island could influence another battle in the same Reveal. The following are explicit resolution conventions added where `SPECIFICATION.md` leaves details open:
+
+1. **Commitment:** each originating island’s fleet is committed to the first Raid that legally uses it (rotating order). Later Raid orders cannot reuse those ships. If all available source fleets are already committed, the Raid fails and earns the normal +1 Gold compensation. Two Raids with disjoint source fleets remain legal.
+2. **One contest per target:** if several houses attack the same island, each contributes its committed fleet and rolls **one six-sided die**. The original defending house contributes its uncommitted Warships, defence bonuses and one die. Nyla’s one reroll applies in Advanced mode.
+3. **Victory:** a unique attacker must beat **both the defender and every other attacking house**. All equal-highest attacking scores cause a defensive stalemate; a tie between attacker and defender also favours the defender. Battles remain simultaneous even when armies attack one another’s original launch islands.
+4. **Casualties:** the winner loses one Warship where possible; each defeated force loses half of its committed ships, **rounded up**. Surviving attackers return to still-owned home islands. Defending survivors retreat to their nearest remaining owned island. If none exists, they are lost at sea.
+5. **Scoring and reporting:** Harbour and Port ownership Renown transfers only once per capture. A structured public battle report records the destination, contenders, dice, strengths, bonuses, casualties and victor. Private inventories, contract choices and credentials stay confidential. The latest round’s battles remain visible during the following planning round.
+
+**Game feedback:** the TV and phone show recent naval battle reports and highlight affected islands, with reduced-motion and keyboard-accessible interfaces preserved. Phase 7 replaces the earlier oscillator-only effects with original bundled MP3/Ogg cues. This is not yet a professionally recorded production package.
+
+**Historical Phase 6 QA:** Phase 6 extended 53 tests with 14 focused tests (including 80 seeded-pattern combat stress scenarios), reaching **67 tests**. Phase 7 adds four further tests for **71 total**. Real-device TV/phone multiplayer and audio QA remains outstanding because a usable local WebSocket installation and physical devices are not available in this build environment.
+
+**Deployment:** GitHub/Render are not automatically updated by creating this archive. The build needs to be committed and deployed separately; currently active rooms would be reset by a deployment because rooms are stored in server memory.

@@ -1,14 +1,15 @@
 {
   "name": "tidewater",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "private": true,
-  "description": "Tidewater — private deals, era upgrade drafts and trophy scoring (Phase 5)",
+  "description": "Tidewater Phase 7 \u2014 game-night audio, smarter AI, usability and strategy balance probes",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "balance": "node tools/balance_tournament.js 100"
   },
   "engines": {
     "node": ">=20"

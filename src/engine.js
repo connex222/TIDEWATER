@@ -61,7 +61,7 @@ function newGame(players,mode){
     mode,phase:'placement',round:0,era:'Sail',chart,placementOrder,placementIndex:0,
     market:Object.fromEntries(GOODS.map(g=>[g,2])),tide:null,nextTide:chooseTide(null,null),previousTide:null,
     orders:{},submitted:{},deadline:null,rotation:0,winnerIds:[],marketSales:[],deals:[],dealSequence:0,trophies:{route:null,fleet:null},masterTrader:[],
-    contractDeck,navigatorId:players.find(p=>p.avatarId==='tobias')?.id||null,weatherDeck:shuffle(WEATHER_CARDS.map(c=>c.id)),weather:null,lowTides:[],history:['The Tidewater chart is unfurled. Captains, claim your first islands.']
+    battles:[],battleRound:null,battleSequence:0,contractDeck,navigatorId:players.find(p=>p.avatarId==='tobias')?.id||null,weatherDeck:shuffle(WEATHER_CARDS.map(c=>c.id)),weather:null,lowTides:[],history:['The Tidewater chart is unfurled. Captains, claim your first islands.']
   };
   for(const p of players){
     p.goods=Object.fromEntries(GOODS.map(g=>[g,1]));
@@ -361,40 +361,123 @@ function publicGame(game){if(!game)return null;
     era:game.era,chart:game.chart,placementIndex:game.placementIndex,placementTotal:game.placementOrder.length,
     currentPlacer:currentPlacer(game),legalPlacements:game.phase==='placement'?legalPlacements(game):[],
     market:game.market,tide:game.tide,lowTides:game.lowTides,weather:game.weather,nextTide:game.weather?.id==='fog'?null:game.nextTide,deadline:game.deadline,
-    submittedIds:Object.keys(game.submitted),winnerIds:game.winnerIds,history:game.history.slice(-14),contractDeckCount:game.contractDeck.length,trophies:game.trophies,masterTrader:game.masterTrader};
+    submittedIds:Object.keys(game.submitted),winnerIds:game.winnerIds,history:game.history.slice(-14),battles:game.battles||[],battleRound:game.battleRound,battleSequence:game.battleSequence||0,contractDeckCount:game.contractDeck.length,trophies:game.trophies,masterTrader:game.masterTrader};
 }
 
-function resolveRaids(game,players,raids){
+/**
+ * Resolve all end-of-round raids against one common board snapshot.
+ * Each ship may commit to at most one raid. All contenders for an island
+ * roll once and contest it together; the defending house wins ties.
+ * rollDie is injectable to make combat outcomes reproducible in tests.
+ */
+function resolveRaids(game,players,raids,rollDie=()=>randomInt(6)+1){
+  game.battles=[];
+  if(!raids.length)return [];
+  const originals=new Map(game.chart.tiles.map(t=>[t.id,{owner:t.owner,warships:t.warships,port:t.port,type:t.type}]));
+  const committed=new Set(),sourceCounts=new Map(),engagements=new Map();
+  const byPlayer=new Map(players.map(p=>[p.id,p]));
+  let failed=0;
   for(const raid of raids){
-    const target=tileById(game,raid.targetId);if(!target||!target.owner||target.owner===raid.attackerId)continue;
-    const sources=raid.sourceIds.map(id=>tileById(game,id)).filter(t=>t&&t.owner===raid.attackerId&&t.warships>0&&distance(t,target)===1);
-    const attackShips=sources.reduce((n,t)=>n+t.warships,0);if(!attackShips)continue;
-    const defenderId=target.owner,defenderShips=target.warships;
-    let attackRoll=randomInt(6)+1,defendRoll=randomInt(6)+1;
-    const attacker=players.find(p=>p.id===raid.attackerId),defender=players.find(p=>p.id===defenderId);
-    if(advancedPerk(game,attacker,'nyla'))attackRoll=Math.max(attackRoll,randomInt(6)+1);
-    if(advancedPerk(game,defender,'nyla'))defendRoll=Math.max(defendRoll,randomInt(6)+1);
-    const defendBonus=(target.type==='reef'?1:0)+(target.port?1:0)+(hasUpgrade(players.find(p=>p.id===defenderId),'coastal-forts')?1:0);
-    const attackStrength=attackShips+attackRoll,defendStrength=defenderShips+defendBonus+defendRoll;
-    for(const source of sources)source.warships=0;
-    if(attackStrength>defendStrength){
-      target.owner=raid.attackerId;target.warships=Math.max(0,attackShips-1);
-      if(target.type==='harbour'){
-        const points=1+(target.port?2:0)+(target.admiraltyHouse?2:0);
-        defender.renown=Math.max(0,defender.renown-points);attacker.renown+=points;
-      }
-      game.history.push(`⚔ ${attacker?.name||'Attacker'} captures ${target.name} from ${defender?.name||'the defender'} (${attackStrength} vs ${defendStrength}).`);
-    }else{
-      redistributeShips(sources,Math.max(0,attackShips-Math.ceil(attackShips/2)));
-      target.warships=Math.max(0,target.warships-1);
-      game.history.push(`🛡 ${defender?.name||'The defender'} repels a raid on ${target.name} (${defendStrength} vs ${attackStrength}).`);
+    const target=tileById(game,raid.targetId),original=originals.get(raid.targetId);
+    if(!target||!original?.owner||original.owner===raid.attackerId)continue;
+    const sources=[...new Set(raid.sourceIds)].map(id=>tileById(game,id)).filter(t=>
+      t&&!committed.has(t.id)&&originals.get(t.id)?.owner===raid.attackerId&&
+      originals.get(t.id).warships>0&&distance(t,target)===1);
+    if(!sources.length){
+      const captain=byPlayer.get(raid.attackerId);
+      if(captain)captain.gold++;
+      game.history.push(`${captain?.name||'A captain'}: raid on ${target.name} could not sail; fleet already committed (+1 Gold).`);
+      failed++;
+      continue;
+    }
+    let group=engagements.get(target.id);
+    if(!group){group={target,defenderId:original.owner,attacks:new Map()};engagements.set(target.id,group);}
+    let attack=group.attacks.get(raid.attackerId);
+    if(!attack){attack={playerId:raid.attackerId,ships:0,sources:[]};group.attacks.set(raid.attackerId,attack);}
+    for(const source of sources){
+      committed.add(source.id);
+      const amount=originals.get(source.id).warships;
+      sourceCounts.set(source.id,amount);
+      attack.ships+=amount;
+      attack.sources.push({id:source.id,ships:amount});
     }
   }
-}
-
-function redistributeShips(sources,count){
-  let i=0;
-  while(count>0&&sources.length){sources[i%sources.length].warships++;count--;i++;}
+  // Sail every committed fleet before deciding any winner; a defending island
+  // can also have launched a raid and must not use those same ships for defence.
+  for(const [id,count] of sourceCounts){const tile=tileById(game,id);tile.warships=Math.max(0,tile.warships-count);}
+  const pendingReturn=[];
+  const results=[];
+  const roll=(captain)=>{
+    const first=rollDie();
+    if(!Number.isInteger(first)||first<1||first>6)throw Error('Combat die must be 1–6');
+    const second=advancedPerk(game,captain,'nyla')?rollDie():null;
+    if(second!==null&&(!Number.isInteger(second)||second<1||second>6))throw Error('Combat die must be 1–6');
+    return {dice:second===null?[first]:[first,second],value:second===null?first:Math.max(first,second)};
+  };
+  // All decisions use the same original ownership; no captured tile can be
+  // reused as a fresh launch point during the same round.
+  for(const group of engagements.values()){
+    const {target,defenderId}=group,defender=byPlayer.get(defenderId);
+    const defenderShips=Math.max(0,originals.get(target.id).warships-(sourceCounts.get(target.id)||0));
+    const bonus=(target.type==='reef'?1:0)+(target.port?1:0)+(hasUpgrade(defender,'coastal-forts')?1:0);
+    const defDie=roll(defender),defStrength=defenderShips+bonus+defDie.value;
+    const attackers=[...group.attacks.values()].map(a=>{
+      const captain=byPlayer.get(a.playerId),die=roll(captain);
+      return {...a,dice:die.dice,strength:a.ships+die.value};
+    });
+    const highest=Math.max(...attackers.map(a=>a.strength));
+    const leaders=attackers.filter(a=>a.strength===highest);
+    const victor=(highest>defStrength&&leaders.length===1)?leaders[0]:null;
+    const captured=!!victor;
+    const defenderLosses=captured?Math.ceil(defenderShips/2):Math.min(1,defenderShips);
+    const attackerReports=[];
+    for(const attack of attackers){
+      const lost=attack.playerId===victor?.playerId?Math.min(1,attack.ships):Math.ceil(attack.ships/2);
+      const surviving=attack.ships-lost;
+      if(attack!==victor&&surviving)pendingReturn.push({playerId:attack.playerId,count:surviving,origin:target.id,sources:attack.sources.map(s=>s.id)});
+      attackerReports.push({playerId:attack.playerId,ships:attack.ships,dice:attack.dice,strength:attack.strength,losses:lost});
+    }
+    if(captured&&defenderShips-defenderLosses>0)pendingReturn.push({playerId:defenderId,count:defenderShips-defenderLosses,origin:target.id,sources:[]});
+    results.push({round:game.round,targetId:target.id,targetName:target.name,defenderId,
+      defender:{playerId:defenderId,ships:defenderShips,dice:defDie.dice,bonus,strength:defStrength,losses:defenderLosses},
+      attackers:attackerReports,winnerId:captured?victor.playerId:defenderId,outcome:captured?'captured':'defended',
+      winningShips:captured?victor.ships-1:Math.max(0,defenderShips-defenderLosses),
+      strandedShips:0});
+  }
+  // Apply all ownership changes only after every battle has been scored.
+  for(const result of results){
+    const target=tileById(game,result.targetId);
+    if(result.outcome==='captured'){
+      const loser=byPlayer.get(result.defenderId),winner=byPlayer.get(result.winnerId);
+      if(target.type==='harbour'){
+        const value=1+(target.port?2:0)+(target.admiraltyHouse?2:0);
+        if(loser)loser.renown=Math.max(0,loser.renown-value);
+        if(winner)winner.renown+=value;
+      }
+      target.owner=result.winnerId;
+    }
+    target.warships=result.winningShips;
+  }
+  // Returning fleets use still-friendly home islands. If their original
+  // island was captured, the nearest surviving friendly island takes them.
+  for(const returnee of pendingReturn){
+    const origin=tileById(game,returnee.origin);
+    const owned=game.chart.tiles.filter(t=>t.owner===returnee.playerId);
+    const home=returnee.sources.map(id=>tileById(game,id)).find(t=>t.owner===returnee.playerId)||
+      owned.sort((a,b)=>distance(a,origin)-distance(b,origin)||a.id.localeCompare(b.id))[0];
+    if(home)home.warships+=returnee.count;
+    else {const report=results.find(x=>x.targetId===returnee.origin);if(report)report.strandedShips+=returnee.count;}
+  }
+  for(const r of results){
+    const attackers=r.attackers.map(a=>byPlayer.get(a.playerId)?.name||'Captain').join(' and ');
+    const winner=byPlayer.get(r.winnerId)?.name||'A captain';
+    game.history.push(r.outcome==='captured'?`⚔ ${winner} captures ${r.targetName} from ${byPlayer.get(r.defenderId)?.name||'a rival'} (naval battle against ${attackers}).`:
+      `🛡 ${winner} defends ${r.targetName} against ${attackers}.`);
+  }
+  game.battles=results;
+  game.battleRound=game.round;
+  game.battleSequence=(game.battleSequence||0)+1;
+  return results;
 }
 
 function awardContracts(game,players){
@@ -483,4 +566,4 @@ function awardMasterTrader(game,players){
 function titleCase(text){return text.charAt(0).toUpperCase()+text.slice(1);}
 
 module.exports={newGame,chooseTide,currentPlacer,legalPlacements,placeSettlement,publicGame,beginFirstRound,
-  payIncome,beginRound,submitOrders,resolveRound,everyoneSubmitted,applyOrder,canSettle,legalTargets,drawContracts,chooseUpgrade,upgradeOptions,expireDeals,pendingDeals,answerDeal,longestRoute,updateTrophies,ERA_UPGRADES,WEATHER_CARDS,chooseContracts,lowTide};
+  payIncome,beginRound,submitOrders,resolveRound,everyoneSubmitted,applyOrder,canSettle,legalTargets,drawContracts,chooseUpgrade,upgradeOptions,expireDeals,pendingDeals,answerDeal,longestRoute,updateTrophies,resolveRaids,ERA_UPGRADES,WEATHER_CARDS,chooseContracts,lowTide};

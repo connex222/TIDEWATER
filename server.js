@@ -5,7 +5,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const WebSocket=require('ws');
 const {CAPTAINS,MODES,randomInt}=require('./src/constants');
-const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,chooseUpgrade,upgradeOptions,chooseContracts,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
+const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,applyOrder,chooseUpgrade,upgradeOptions,chooseContracts,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
 const {qrSvg}=require('./src/qr');
 const PORT=Number(process.env.PORT)||3000;
 const PUBLIC=path.resolve(__dirname,'public');
@@ -79,19 +79,57 @@ function runBotPlacement(room){
     placeSettlement(room.game,room.players,player.id,choices[randomInt(choices.length)]);
   }
 }
+/** Candidate-driven AI: chooses up to two actually affordable legal orders.
+ * Rules are checked on a disposable clone; no private player information is used.
+ * Each captain's preference is deliberately distinct, not a claim of optimal play.
+ */
 function botOrders(game,p){
+  const targets=legalTargets(game,p.id);
   const owned=game.chart.tiles.filter(t=>t.owner===p.id);
-  const free=game.chart.tiles.find(t=>t.owner===null&&['harbour','fish','timber','spice','silk','reef'].includes(t.type)&&canSettle(game,p.id,t));
-  if(free&&p.goods.fish>0&&p.goods.timber>0)return [{kind:'settle',tileId:free.id},{kind:'hold'}];
-  const port=owned.find(t=>t.type==='harbour'&&!t.port);
-  if(port&&p.goods.spice>=2&&p.goods.silk>=2&&p.goods.timber>=1)return [{kind:'port',tileId:port.id},{kind:'hold'}];
-  const first=game.chart.lanes.find(l=>l.owner===null&&l.colour!==game.tide&&
-    owned.some(t=>t.id===l.from||t.id===l.to)&&p.goods.timber>=l.segments&&p.goods.silk>=l.segments);
-  if(first)return [{kind:'lane',laneId:first.id},{kind:'hold'}];
-  const marketGood=['spice','silk','fish','timber'].find(g=>p.goods[g]>=2);
-  if(marketGood)return [{kind:'market',direction:'sell',quantities:{[marketGood]:1}},{kind:'hold'}];
-  if(owned.length&&p.gold>=2)return [{kind:'warships',tileId:owned[0].id,count:1},{kind:'hold'}];
-  return [{kind:'hold'},{kind:'hold'}];
+  const tile=id=>game.chart.tiles.find(t=>t.id===id);
+  const lane=id=>game.chart.lanes.find(l=>l.id===id);
+  const outgoing=[];
+  // An enemy with a weak garrison is a valid tactical target.
+  const raids=targets.raid.map(id=>tile(id)).filter(t=>t&&owned.filter(o=>o.warships>0&&Math.max(Math.abs(o.q-t.q),Math.abs(o.r-t.r),Math.abs(o.q+o.r-t.q-t.r))===1).reduce((n,o)=>n+o.warships,0)>=t.warships+2);
+  const settles=targets.settle.map(tile).filter(Boolean).sort((a,b)=>{
+    const score=t=>(t.type==='harbour'?12:0)+(['fish','timber'].includes(t.type)?6:0)+((p.goods[t.type]||0)<2?2:0);
+    return score(b)-score(a);
+  });
+  const ports=targets.port.map(tile).filter(Boolean);
+  const lanes=targets.lane.map(lane).filter(Boolean).sort((a,b)=>a.segments-b.segments);
+  const marketOrders=['spice','silk','fish','timber'].filter(g=>p.goods[g]>=(['spice','silk'].includes(g)?2:4)).map(g=>({kind:'market',direction:'sell',quantities:{[g]:Math.min(3,p.goods[g]-(['fish','timber'].includes(g)?2:0))}}));
+  const buy=()=>({kind:'market',direction:'buy',quantities:{fish:p.goods.fish<1?1:0,timber:p.goods.timber<1?1:0}});
+  const constructs=[...settles.slice(0,5).map(t=>({kind:'settle',tileId:t.id})),...ports.map(t=>({kind:'port',tileId:t.id})),...lanes.slice(0,5).map(l=>({kind:'lane',laneId:l.id}))];
+  const ships=owned.map(t=>({kind:'warships',tileId:t.id,count:p.gold>=6?3:1}));
+  const combat=raids.map(t=>({kind:'raid',tileId:t.id}));
+  const exploration=game.contractDeck.length?[{kind:'explore'}]:[];
+  const categories={
+    isadora:[combat,ships,constructs,marketOrders,exploration],
+    tobias:[lanes.map(l=>({kind:'lane',laneId:l.id})),constructs,marketOrders,ships,combat],
+    rosa:[marketOrders,constructs,exploration,ships,combat],
+    finch:[constructs,marketOrders,exploration,combat,ships],
+    'mei-lin':[ports.map(t=>({kind:'port',tileId:t.id})),constructs,marketOrders,exploration,ships],
+    hugo:[lanes.map(l=>({kind:'lane',laneId:l.id})),constructs,marketOrders,ships,combat],
+    nyla:[combat,ships,constructs,marketOrders,exploration],
+    felix:[marketOrders,constructs,exploration,ships,combat]
+  };
+  outgoing.push(...(categories[p.avatarId]||[constructs,marketOrders,ships,combat,exploration]).flat());
+  if(p.goods.fish<1||p.goods.timber<1)outgoing.push(buy());
+  outgoing.push({kind:'hold'});
+  const clone=structuredClone({...game,orders:{},submitted:{}});
+  const captain=structuredClone({id:p.id,name:p.name,avatarId:p.avatarId,gold:p.gold,goods:p.goods,renown:p.renown,
+    contracts:p.contracts||[],contractReserve:p.contractReserve||[],upgrades:p.upgrades||[],marketGoldEra:p.marketGoldEra||0});
+  const context={market:{...clone.market},sold:new Set(),raids:[],explored:new Set(),players:[captain],dealOrders:new Set()};
+  const chosen=[];
+  for(const order of outgoing){
+    if(chosen.length===2)break;
+    // Do not let novice AI double-commit a fleet to two different raids.
+    if(order.kind==='raid'&&chosen.some(x=>x.kind==='raid'))continue;
+    const result=applyOrder(clone,captain,order,context);
+    if(result.ok){chosen.push(order);if(order.kind==='hold')break;}
+  }
+  while(chosen.length<2)chosen.push({kind:'hold'});
+  return chosen;
 }
 function progressPlanning(room,now=Date.now()){
   if(!room.game||room.game.phase!=='plan')return;
@@ -204,7 +242,7 @@ function processAction(ws,msg){
   return error(ws,'Unknown action or not available in this phase.');
 }
 const ROUTES=new Map([['/','tv.html'],['/tv.html','tv.html'],['/phone.html','phone.html']]);
-const MIME={'.html':'text/html; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml; charset=utf-8','.webp':'image/webp','.woff2':'font/woff2'};
+const MIME={'.html':'text/html; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml; charset=utf-8','.webp':'image/webp','.woff2':'font/woff2','.ogg':'audio/ogg','.mp3':'audio/mpeg'};
 const server=http.createServer((req,res)=>{
   try{
     const url=new URL(req.url,'http://localhost');
@@ -217,11 +255,14 @@ const server=http.createServer((req,res)=>{
       const joinUrl=`${protocol}://${host}/phone.html?room=${code}`;
       const svg=qrSvg(joinUrl);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(svg);return;
     }
-    if(url.pathname.startsWith('/art/')){
+    if(url.pathname.startsWith('/art/')||url.pathname.startsWith('/audio/')){
+      const kind=url.pathname.startsWith('/audio/')?'audio':'art';
       const asset=path.resolve(PUBLIC,'.'+url.pathname);
-      if(!asset.startsWith(path.join(PUBLIC,'art'))||!fs.existsSync(asset)){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
+      const root=path.join(PUBLIC,kind)+path.sep;
+      if(!asset.startsWith(root)||!fs.existsSync(asset)||!fs.statSync(asset).isFile()){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
       const ext=path.extname(asset).toLowerCase();
-      res.writeHead(200,{'Content-Type':MIME[ext]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+      res.writeHead(200,{'Content-Type':MIME[ext]||'application/octet-stream','Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'});
+      if(req.method==='HEAD'){res.end();return;}
       fs.createReadStream(asset).pipe(res);return;
     }
     const file=ROUTES.get(url.pathname);if(!file){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return;}
@@ -253,5 +294,5 @@ const planningClock=setInterval(()=>{
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000)rooms.delete(code);}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 5 serving on http://localhost:${PORT}`));}
-module.exports={server,wss,rooms,processAction};
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 7 serving on http://localhost:${PORT}`));}
+module.exports={server,wss,rooms,processAction,botOrders};

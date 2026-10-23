@@ -1,0 +1,194 @@
+{
+  "generatedAt": "2026-10-23T07:24:35.398Z",
+  "name": "Tidewater Phase 7 heuristic strategy balance probe",
+  "runsPerMode": 320,
+  "notes": [
+    "Artificial rule-level agents, one action plus Hold each round; no human tactical anticipation or negotiated trades.",
+    "Board, dice, weather, and seat assignments vary; run output is stochastic and is not a validated win-rate forecast.",
+    "No balance rule alterations are made on the basis of this report."
+  ],
+  "modes": {
+    "quick": {
+      "runs": 320,
+      "sharedWins": 5,
+      "winCredits": {
+        "trade": 30.6,
+        "expand": 19.1,
+        "navy": 18,
+        "hybrid": 32.3
+      },
+      "meanRenown": {
+        "trade": 2.17,
+        "expand": 2.22,
+        "navy": 2.08,
+        "hybrid": 2.55
+      },
+      "meanGold": {
+        "trade": 23.93,
+        "expand": 15.96,
+        "navy": 6.83,
+        "hybrid": 18.48
+      },
+      "meanIslands": {
+        "trade": 1.38,
+        "expand": 6.94,
+        "navy": 5.18,
+        "hybrid": 7.51
+      },
+      "meanShips": {
+        "trade": 1.29,
+        "expand": 1.38,
+        "navy": 3.78,
+        "hybrid": 1.57
+      },
+      "meanRound": 8,
+      "actions": {
+        "trade": {
+          "market": 2558,
+          "settle": 2
+        },
+        "expand": {
+          "settle": 2296,
+          "market": 210,
+          "lane": 43,
+          "port": 11
+        },
+        "navy": {
+          "market": 613,
+          "warships": 671,
+          "raid": 1276
+        },
+        "hybrid": {
+          "settle": 2360,
+          "market": 177,
+          "port": 7,
+          "lane": 14,
+          "warships": 1,
+          "raid": 1
+        }
+      }
+    },
+    "standard": {
+      "runs": 320,
+      "sharedWins": 2,
+      "winCredits": {
+        "trade": 11.3,
+        "expand": 34.7,
+        "navy": 16.3,
+        "hybrid": 37.8
+      },
+      "meanRenown": {
+        "trade": 2.19,
+        "expand": 3.15,
+        "navy": 2.72,
+        "hybrid": 3.34
+      },
+      "meanGold": {
+        "trade": 37.18,
+        "expand": 25.21,
+        "navy": 8.36,
+        "hybrid": 29.93
+      },
+      "meanIslands": {
+        "trade": 1.24,
+        "expand": 9.52,
+        "navy": 7.07,
+        "hybrid": 9.3
+      },
+      "meanShips": {
+        "trade": 0.98,
+        "expand": 1.24,
+        "navy": 4.36,
+        "hybrid": 1.3
+      },
+      "meanRound": 12,
+      "actions": {
+        "trade": {
+          "market": 3806,
+          "settle": 30,
+          "hold": 4
+        },
+        "expand": {
+          "settle": 3417,
+          "market": 305,
+          "port": 42,
+          "lane": 76
+        },
+        "navy": {
+          "market": 693,
+          "warships": 1053,
+          "raid": 2094
+        },
+        "hybrid": {
+          "settle": 3322,
+          "market": 410,
+          "lane": 60,
+          "port": 46,
+          "warships": 1,
+          "raid": 1
+        }
+      }
+    },
+    "advanced": {
+      "runs": 320,
+      "sharedWins": 3,
+      "winCredits": {
+        "trade": 14.5,
+        "expand": 31.9,
+        "navy": 24.1,
+        "hybrid": 29.5
+      },
+      "meanRenown": {
+        "trade": 0.48,
+        "expand": 1.59,
+        "navy": 1.37,
+        "hybrid": 1.39
+      },
+      "meanGold": {
+        "trade": 45.28,
+        "expand": 28.4,
+        "navy": 11.47,
+        "hybrid": 33.52
+      },
+      "meanIslands": {
+        "trade": 1.23,
+        "expand": 9.39,
+        "navy": 7.3,
+        "hybrid": 9.53
+      },
+      "meanShips": {
+        "trade": 0.9,
+        "expand": 1.19,
+        "navy": 5.09,
+        "hybrid": 1.32
+      },
+      "meanRound": 12,
+      "actions": {
+        "trade": {
+          "market": 3793,
+          "settle": 43,
+          "hold": 4
+        },
+        "expand": {
+          "settle": 3414,
+          "market": 274,
+          "lane": 94,
+          "port": 58
+        },
+        "navy": {
+          "market": 631,
+          "raid": 2096,
+          "warships": 1113
+        },
+        "hybrid": {
+          "settle": 3422,
+          "market": 346,
+          "port": 23,
+          "lane": 47,
+          "warships": 1,
+          "raid": 1
+        }
+      }
+    }
+  }
+}
