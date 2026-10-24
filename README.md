@@ -219,3 +219,7 @@ The server gathers every valid Raid during the Reveal and resolves them against 
 **Historical QA:** Phase 6 reached **67 tests**; Phase 7 reached **71**; Phase 8 reached **81**; Phase 9 reaches **90 automated tests**, plus synthetic Chromium layout/input checks. Real-device TV/phone multiplayer and audio QA remains outstanding because a usable local WebSocket installation and physical devices are not available in this build environment.
 
 **Deployment:** GitHub/Render are not automatically updated by creating this archive. Commit and deploy separately. Phase 8 can recover active rooms *only when its state file is retained*; deploys that replace an ephemeral filesystem still reset matches.
+
+### Mirelo effects installed — v0.13.1
+
+Eight professional user-provided Mirelo WAVs have been installed for bell, build, cannon, deal, market, tide, victory and warning; browsers use local MP3/Ogg, original WAV masters are retained, and provenance is recorded in `public/audio/mirelo-assets.json`. Verify with `npm test` and `python tools/verify_mirelo_installation.py`. Music is unchanged.

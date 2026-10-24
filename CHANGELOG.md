@@ -163,3 +163,11 @@ These are implementation decisions, **not** changes to `SPECIFICATION.md`.
 - Four-letter rooms, QR, eight captains, TV/phone layouts.
 - 37 hex tiles, 18 sea lanes, snake-order opening placement and initial tide/income.
 - Rejoin tokens, basic bot placement, bundled specification and Render Blueprint.
+
+## v0.13.1 — Mirelo studio sound installation (24 October 2026)
+
+- Installed eight original Mirelo SFX 2.0 48 kHz WAV masters supplied by the game owner.
+- Replaced the eight live browser effect pairs with level-balanced MP3 and Ogg encodes.
+- Kept source masters and an auditable audio provenance and SHA256 manifest.
+- Preserved original audio in the release archive and original backing music unchanged.
+- Added checksum tests proving professional effects were installed instead of merely claimed.

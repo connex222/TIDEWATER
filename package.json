@@ -1,8 +1,8 @@
 {
   "name": "tidewater",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "private": true,
-  "description": "Tidewater Phase 12 \u2014 portable, host-authorised games-night backups and recovery",
+  "description": "Tidewater multiplayer nautical strategy \u2014 Mirelo premium effect masters installed",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

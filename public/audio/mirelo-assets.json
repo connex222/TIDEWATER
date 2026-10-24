@@ -1,0 +1,184 @@
+{
+  "library": "Tidewater Mirelo audio upgrade",
+  "version": "0.13.1",
+  "master_rate_hz": 48000,
+  "source_archive": "TIDEWATER-MIRELO-AUDIO.zip",
+  "effects": [
+    {
+      "cue": "bell",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 2000,
+      "variants": {
+        "wav": {
+          "sha256": "2462b5d381a306602fb516bd7788b186e918f1f571aa476c53e4df33e29d1c2f",
+          "bytes": 192078,
+          "path": "public/audio/mirelo-masters/bell.wav"
+        },
+        "mp3": {
+          "sha256": "46df6de983001c6d78fa52d9c70ec0290840fb9501d86419c954e8b2df4c8b4b",
+          "bytes": 41324,
+          "path": "public/audio/bell.mp3"
+        },
+        "ogg": {
+          "sha256": "9c323fd6a8264d3a7047695bb48e7379e1a466c6c94a2269f578703e3422eb59",
+          "bytes": 22174,
+          "path": "public/audio/bell.ogg"
+        }
+      }
+    },
+    {
+      "cue": "build",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 2400,
+      "variants": {
+        "wav": {
+          "sha256": "618ab52b51cb8a8b9780087b9f3c64dad39e5a9a1852f97cc31489e64862725c",
+          "bytes": 230478,
+          "path": "public/audio/mirelo-masters/build.wav"
+        },
+        "mp3": {
+          "sha256": "2cb78e073c320f9e04802b25157067bc2c4da8fa38174b2bcbf103519de011f2",
+          "bytes": 49004,
+          "path": "public/audio/build.mp3"
+        },
+        "ogg": {
+          "sha256": "d988f0302b532c57c391db2b37201c4c7ec719d4e6959f8f9e28b8a886c6327b",
+          "bytes": 22828,
+          "path": "public/audio/build.ogg"
+        }
+      }
+    },
+    {
+      "cue": "cannon",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 3000,
+      "variants": {
+        "wav": {
+          "sha256": "f679078fcdfcf5773d2ecc7bd73764ebc0294df2a4ab5b4bdd99c91ec615b712",
+          "bytes": 288078,
+          "path": "public/audio/mirelo-masters/cannon.wav"
+        },
+        "mp3": {
+          "sha256": "e45bfc1e08669307ebef9e0bd28e0272ab5255152f211cac8c27c1c12dcf149a",
+          "bytes": 61004,
+          "path": "public/audio/cannon.mp3"
+        },
+        "ogg": {
+          "sha256": "8d31d51ccb55099893c08fbd5ee7df49d6d3a48f209ee904383ef594e5484a5c",
+          "bytes": 27452,
+          "path": "public/audio/cannon.ogg"
+        }
+      }
+    },
+    {
+      "cue": "deal",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 1900,
+      "variants": {
+        "wav": {
+          "sha256": "ef53463106e778345ff7ae38db8edb08d87f3183749966e42b4076617d559d98",
+          "bytes": 182478,
+          "path": "public/audio/mirelo-masters/deal.wav"
+        },
+        "mp3": {
+          "sha256": "b280aef3c60535527d757cd2510b4507ed8a0fea451ef8e204fce9bf407362fe",
+          "bytes": 39404,
+          "path": "public/audio/deal.mp3"
+        },
+        "ogg": {
+          "sha256": "ad1aae1d79608cb8e9051f92ab5c08dbcd2e5d53fd52877e094c4fc056ec6dbe",
+          "bytes": 20149,
+          "path": "public/audio/deal.ogg"
+        }
+      }
+    },
+    {
+      "cue": "market",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 1700,
+      "variants": {
+        "wav": {
+          "sha256": "9fdbb9b6e23948efc2f629f12d517bf6dc692cd2414e130bd3f651862d8b6089",
+          "bytes": 163278,
+          "path": "public/audio/mirelo-masters/market.wav"
+        },
+        "mp3": {
+          "sha256": "fa1aaaab3159cf75cc71abd68e955016a2053d9da52e3a0fb14c92b5b04e9734",
+          "bytes": 35084,
+          "path": "public/audio/market.mp3"
+        },
+        "ogg": {
+          "sha256": "038d7beed0d206532b73161737b3e90951b2828448cecd0030e5e462e5d4f7da",
+          "bytes": 22158,
+          "path": "public/audio/market.ogg"
+        }
+      }
+    },
+    {
+      "cue": "tide",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 2800,
+      "variants": {
+        "wav": {
+          "sha256": "29f25f42374a220186a42dd33b0960e23881371cbeb174a6465f5833bd564947",
+          "bytes": 268878,
+          "path": "public/audio/mirelo-masters/tide.wav"
+        },
+        "mp3": {
+          "sha256": "507b55f9f078c93bc00621b8fd293eae741542f03c8dbcea91338ecd39a8e6c4",
+          "bytes": 57164,
+          "path": "public/audio/tide.mp3"
+        },
+        "ogg": {
+          "sha256": "367ce6b5f5ed3abac2e840846caeb211283781e5e963ec1284eed4482834fb22",
+          "bytes": 29449,
+          "path": "public/audio/tide.ogg"
+        }
+      }
+    },
+    {
+      "cue": "victory",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 3800,
+      "variants": {
+        "wav": {
+          "sha256": "1440d4241dfd64e04bfc9e7b8d344d15e30f79c675eff437fd066da82bb329fd",
+          "bytes": 364878,
+          "path": "public/audio/mirelo-masters/victory.wav"
+        },
+        "mp3": {
+          "sha256": "2a630576bbcffd0d2c74174d4c0251db4e657d25c78a022e87e729b93f186ce8",
+          "bytes": 77324,
+          "path": "public/audio/victory.mp3"
+        },
+        "ogg": {
+          "sha256": "b56cf90159be77c128caf31f4a9af0d2e9c7c07c537a112aa55a8522eae9632c",
+          "bytes": 37336,
+          "path": "public/audio/victory.ogg"
+        }
+      }
+    },
+    {
+      "cue": "warning",
+      "source": "Mirelo SFX 2.0 (user-supplied WAV)",
+      "duration_ms": 1700,
+      "variants": {
+        "wav": {
+          "sha256": "59af111a85bff97c5cc66dc62981cb8e6a702e53e55ef115e6c41a41d7c4805f",
+          "bytes": 163278,
+          "path": "public/audio/mirelo-masters/warning.wav"
+        },
+        "mp3": {
+          "sha256": "e615fe1147310ae2ce62d8a0009d805b66ee23b0a2023ca2278698a401ff335f",
+          "bytes": 35084,
+          "path": "public/audio/warning.mp3"
+        },
+        "ogg": {
+          "sha256": "01e21a97e9b54632d411105d1b48fdaf1f46ffe17cfec1809768e7059c06002f",
+          "bytes": 17671,
+          "path": "public/audio/warning.ogg"
+        }
+      }
+    }
+  ]
+}

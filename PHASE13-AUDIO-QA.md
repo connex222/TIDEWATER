@@ -10,3 +10,5 @@ Phase 13 protects the TV and phone audio output under fast multiplayer events. I
 - Never commit `tools/mirelo_sources.local.json` to GitHub. It contains expiring signed download links.
 - To verify after installation: `npm test`, `npm run test:live` (on a network-equipped server), and visual device sound checks.
 - A successful deployment does not mean the premium sound release gate is passed.
+
+**v0.13.1:** Eight original user-provided Mirelo WAV masters installed; source hashes and new browser encodes validated with `test/mirelo-installed-assets.test.js` and `tools/verify_mirelo_installation.py`. No signed Mirelo links or app credentials are part of the deployed files.
