@@ -1,8 +1,8 @@
 {
   "name": "tidewater",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "private": true,
-  "description": "Tidewater multiplayer nautical strategy \u2014 Mirelo premium effect masters installed",
+  "description": "Tidewater multiplayer nautical strategy \u2014 Royal Chart Room premium TV and phone redesign; Mirelo audio preserved",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

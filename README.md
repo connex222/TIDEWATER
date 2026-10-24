@@ -1,3 +1,7 @@
+# Premium entrance (Phase 14)
+
+The **Royal Chart Room** theme introduces an elegant TV welcome screen and matching phone controller. The TV already creates a room automatically on connecting; the four-letter code and QR appear on the welcome screen, and **Enter Harbour Lobby** reveals the existing host controls. The welcome screen automatically closes on the first player joining; active/recovered voyages open directly on the game board. No game rules, Mirelo audio, pairing or persistence behaviour has been removed. See `PHASE14-PREMIUM-DESIGN.md` for details.
+
 ## Phase 13 audio improvements
 
 Audio playback now limits simultaneous sounds on TV and phone. Mute immediately stops live effect instances. The new `tools/verify_mirelo_installation.py` enforces a real audio-file release gate, rather than claiming generated links equal deployed audio. See `PHASE13-AUDIO-QA.md`.

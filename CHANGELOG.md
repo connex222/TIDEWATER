@@ -1,3 +1,12 @@
+## Phase 14 — Royal Chart Room premium TV and phone redesign (v0.14.0)
+
+- Selected the fourth approved design direction and applied original Tidewater logo, eight existing realistic captains, deep navy chart-room surfaces and gold controls.
+- Introduced full TV welcome screen with functioning room code, QR, join link, prominent How to Play and entry into the existing lobby.
+- Automatically leave the welcome screen as soon as a captain joins and never obscure the chart of an active/recovered game.
+- Redesigned the phone join flow with clearer instructions, a framed official logo, legible entry controls and more prominent captain portraits; retained all gameplay screens and data flows.
+- Kept premium Mirelo WAV masters, converted audio, separate mute/music controls and every server-authoritative mechanic unchanged.
+- Expanded automated UI, assets, and accessibility-regression coverage.
+
 ## v0.13.0 — Phase 13 (24 October 2026)
 
 - Bounded overlapping TV/phone sounds, per-cue cooldowns and immediate silence when effects are muted.
