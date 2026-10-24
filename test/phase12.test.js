@@ -120,6 +120,6 @@ test('backup UI offers visible, explicit actions and server deployment remains d
   assert.match(tv,/Keep this file private/);
   assert.match(tv,/Authorization':'Bearer/);
   assert.match(tv,/role="status" aria-live="polite"/);
-  assert.equal(pkg.version,'0.12.0');
+  assert.match(pkg.version,/^0\.(?:12|13)\.0$/);
   assert.deepEqual(Object.keys(pkg.dependencies),['ws']);
 });

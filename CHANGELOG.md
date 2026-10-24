@@ -1,3 +1,10 @@
+## v0.13.0 — Phase 13 (24 October 2026)
+
+- Bounded overlapping TV/phone sounds, per-cue cooldowns and immediate silence when effects are muted.
+- Audio installation audit checks replaced MP3/Ogg files and retained WAV masters, distinguishing synthetic fallbacks from actual Mirelo installations.
+- Added Phase 13 regression tests and dedicated release checklist.
+- Original sound files retained while Mirelo media downloads are blocked in the build environment.
+
 # Tidewater development history
 
 ## v0.12.0 — Phase 12: Private Voyage Backup & Restore

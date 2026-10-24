@@ -1,3 +1,7 @@
+## Phase 13 audio improvements
+
+Audio playback now limits simultaneous sounds on TV and phone. Mute immediately stops live effect instances. The new `tools/verify_mirelo_installation.py` enforces a real audio-file release gate, rather than claiming generated links equal deployed audio. See `PHASE13-AUDIO-QA.md`.
+
 # TIDEWATER — Phase 12 (v0.12.0)
 
 **Phase 12: manual, host-authorised portable match recovery.** On hosts without a persistent volume (including Render's Free tier), the host can pause an active match, download a private JSON backup from the TV/PC, and later restore it into a *new empty lobby* after the server is replaced. The import keeps the original room code and captain credentials, preserves private orders and inventories, and resumes only when the host explicitly chooses Resume. Unauthorised downloads and overwrites of existing rooms are rejected.
