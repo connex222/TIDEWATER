@@ -1,5 +1,14 @@
 # Tidewater development history
 
+## v0.12.0 — Phase 12: Private Voyage Backup & Restore
+
+- Added explicit **Download Private Backup** and **Restore Backup into Empty Room** controls on the TV/PC host screen.
+- Host-authorised, same-origin JSON POST endpoints with an active host session, a 512 KiB request limit, no-cache download headers and rejection of unpaused exports or occupied-room imports.
+- Full snapshot validation and safe, paused recovery while preserving the original code, host/captain credentials, secret locked orders, inventories and clock/deal time remaining.
+- Added recovery and security instructions for Render Free plans and other hosts without durable local storage; backups are unencrypted and manual, not a replacement for persistent disks or a database.
+- Added four targeted test cases; **117/117 Node tests** and **7/7 synthetic Chromium checks** passed. No changes to scoring, trading, combat, captain identities or `SPECIFICATION.md`.
+
+
 ## v0.11.0 — Phase 11: Multiplayer Acceptance & Host-Loss Safety
 
 - Automatically pause in-progress voyages when the active TV host disconnects. Preserve remaining Plan and Deal countdowns, inventories and all locked orders.

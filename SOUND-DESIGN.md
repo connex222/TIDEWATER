@@ -35,3 +35,7 @@ The music loops while enabled. It intentionally keeps dynamic range moderate, so
 To regenerate these original digital audio assets, run `python tools/generate_audio.py`. This development utility requires `numpy`, `scipy`, and `ffmpeg`; none is required to **play the game** because finished MP3/Ogg files are included.
 
 A later optional studio-audio pass could replace these with more natural ship rigging, gulls, waves, harbour bells, battle cannon and licensed instrumental performances. Such a production pass has **not** been claimed or carried out in Phase 7.
+
+## October 2026 — Mirelo mastering kit
+
+Eight professional WAV cue generations from Mirelo SFX 2.0 succeeded. See `MIRELO-SOUND-UPGRADE.md` and `tools/install_mirelo_sfx.py` for installation, exact filenames and expiry. These generated media bytes are **not** inside this particular uninstalled package: the existing synthetic sound tracks remain in place as working fallback. The TV and phone apply safer per-cue gain, especially for naval cannon fire. The TV plays `warning` when the host pauses a voyage.

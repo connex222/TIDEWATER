@@ -8,6 +8,7 @@ const {CAPTAINS,MODES,randomInt}=require('./src/constants');
 const {newGame,placeSettlement,publicGame,currentPlacer,legalPlacements,submitOrders,resolveRound,everyoneSubmitted,canSettle,legalTargets,applyOrder,chooseUpgrade,upgradeOptions,chooseContracts,expireDeals,pendingDeals,answerDeal}=require('./src/engine');
 const {qrSvg}=require('./src/qr');
 const {writeSnapshot,restoreSnapshot}=require('./src/persistence');
+const {exportBackup,importBackup,authorised,checkOrigin,readRequest}=require('./src/backup');
 const {startHeartbeat}=require('./src/heartbeat');
 const PORT=Number(process.env.PORT)||3000;
 const PUBLIC=path.resolve(__dirname,'public');
@@ -299,11 +300,46 @@ function processAction(ws,msg){
   }
   return error(ws,'Unknown action or not available in this phase.');
 }
+// Host backups are deliberately separate from WebSocket game actions. A game
+// snapshot can exceed the WebSocket input limit; these endpoints accept up to
+// 512 KB, are same-origin and require the current room's private host token.
+async function handleBackupRequest(req,res,route){
+  const respond=(status,payload)=>{if(!res.headersSent)res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(payload));};
+  try{
+    if(req.method!=='POST')return respond(405,{error:'Use POST.'});
+    if(!checkOrigin(req))return respond(403,{error:'Backup requests must come from this game site.'});
+    const data=await readRequest(req);
+    const code=typeof data.room==='string'?data.room.toUpperCase():'';
+    const room=rooms.get(code);
+    const supplied=String(req.headers.authorization||'').match(/^Bearer ([A-Za-z0-9_-]+)$/)?.[1];
+    if(!room||!authorised(room.token,supplied)||!room.host||room.host.readyState!==WebSocket.OPEN)return respond(403,{error:'Active host authorisation required.'});
+    if(route==='export'){
+      if(room.game&&room.game.phase!=='finished'&&!room.paused)return respond(409,{error:'Pause the voyage before downloading a backup.'});
+      const result=exportBackup(room);
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="tidewater-${room.code}-private-backup.json"`,'Cache-Control':'no-store, no-cache, must-revalidate','Pragma':'no-cache','X-Content-Type-Options':'nosniff'});
+      res.end(result);return;
+    }
+    if(room.game||room.players.length)return respond(409,{error:'Restore only into a new, empty lobby. Create a fresh room first.'});
+    const saved=importBackup(data.backup);
+    if(saved.code!==room.code&&rooms.has(saved.code))return respond(409,{error:'A room with that code already exists. No match was overwritten.'});
+    const oldCode=room.code;
+    // Keep the exported captain IDs/tokens and room code: the original phones
+    // can rejoin after the new host imports the file and reconnects them.
+    saved.host=room.host;
+    rooms.delete(oldCode);rooms.set(saved.code,saved);
+    saved.host.roomCode=saved.code;
+    saveRooms();
+    send(saved.host,{type:'room_created',code:saved.code,token:saved.token});
+    publish(saved);
+    return respond(200,{ok:true,code:saved.code,paused:saved.paused,players:saved.players.length});
+  }catch(e){return respond(e.status||400,{error:e.message||'Unable to process backup.'});}
+}
 const ROUTES=new Map([['/','tv.html'],['/tv.html','tv.html'],['/phone.html','phone.html']]);
 const MIME={'.html':'text/html; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml; charset=utf-8','.webp':'image/webp','.woff2':'font/woff2','.ogg':'audio/ogg','.mp3':'audio/mpeg'};
 const server=http.createServer((req,res)=>{
   try{
     const url=new URL(req.url,'http://localhost');
+    if(url.pathname==='/api/backup/export'||url.pathname==='/api/backup/import'){void handleBackupRequest(req,res,url.pathname.split('/').pop());return;}
     if(url.pathname==='/health'){const ok=!persistenceError;res.writeHead(ok?200:503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({status:ok?'ok':'degraded',app:'Tidewater',rooms:rooms.size,persistence:persistenceEnabled?(ok?'ok':'error'):'disabled'}));return;}
     if(url.pathname==='/qr.svg'){
       const code=(url.searchParams.get('room')||'').toUpperCase();if(!/^[A-Z]{4}$/.test(code)||!rooms.has(code)){res.writeHead(404);res.end();return;}
@@ -356,5 +392,5 @@ const planningClock=setInterval(()=>{
 const sweeper=setInterval(()=>{
   const now=Date.now();for(const [code,room] of rooms){if(!room.game&&!room.host&&room.players.every(p=>!p.ws)&&now-room.createdAt>12*60*60*1000){rooms.delete(code);saveRooms();}}
 },60*60*1000);sweeper.unref();
-if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 11 serving on http://localhost:${PORT}`));}
+if(require.main===module){server.listen(PORT,'0.0.0.0',()=>console.log(`Tidewater Phase 12 serving on http://localhost:${PORT}`));}
 module.exports={server,wss,rooms,processAction,botOrders,roomPublic,detach,pauseRoom};

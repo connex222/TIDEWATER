@@ -1,8 +1,8 @@
 {
   "name": "tidewater",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
-  "description": "Tidewater Phase 11 \u2014 host disconnect safety, live WebSocket acceptance and release checks",
+  "description": "Tidewater Phase 12 \u2014 portable, host-authorised games-night backups and recovery",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

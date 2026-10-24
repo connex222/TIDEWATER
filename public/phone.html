@@ -22,7 +22,7 @@ let ws=null,room=null,self=null,selected='isadora',available=null,retry=0,draft=
 let phoneSounds=false,lastDealIds=new Set(),lastBattleSequence=0,lastPhase=null;
 function phoneCue(kind){
  if(!phoneSounds)return;
- try{const a=new Audio('/audio/'+kind+'.mp3');a.volume=.26;a.play().catch(()=>{});}catch{}
+ try{const a=new Audio('/audio/'+kind+'.mp3');a.volume=kind==='cannon'?.16:kind==='victory'?.20:.26;a.play().catch(()=>{});}catch{}
 }
 function syncPhoneSound(){$('phone-sound').textContent=phoneSounds?'🔊':'🔇';$('phone-sound').setAttribute('aria-pressed',String(phoneSounds));}
 $('phone-sound').onclick=()=>{phoneSounds=!phoneSounds;syncPhoneSound();if(phoneSounds)phoneCue('bell');};

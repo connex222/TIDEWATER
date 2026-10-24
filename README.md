@@ -1,3 +1,13 @@
+# TIDEWATER — Phase 12 (v0.12.0)
+
+**Phase 12: manual, host-authorised portable match recovery.** On hosts without a persistent volume (including Render's Free tier), the host can pause an active match, download a private JSON backup from the TV/PC, and later restore it into a *new empty lobby* after the server is replaced. The import keeps the original room code and captain credentials, preserves private orders and inventories, and resumes only when the host explicitly chooses Resume. Unauthorised downloads and overwrites of existing rooms are rejected.
+
+The backup file contains **unencrypted private tokens, secret orders and inventories**, so keep it confidential. The backup is manual, not a guarantee of persistent or continuous storage. See **`PHASE12-QA.md`** for usage, limitations and verification instructions. Existing gameplay rules, the original `SPECIFICATION.md`, avatar art and sound are unchanged.
+
+**Phase 12 QA:** `npm test` / `node --test` passed **117/117**; the seven synthetic Chromium phone/TV checks passed. Real-device failover and the original WebSocket acceptance runner were **not executed in this development environment**. GitHub and Render deployment remain separate steps.
+
+---
+
 # TIDEWATER — Phase 11 (v0.11.0)
 
 **Phase 11: host-disconnect safety and a repeatable real WebSocket acceptance harness.** If the authenticated TV host drops offline during an active voyage, planning and outstanding deal timers now freeze automatically; the host reconnects with the existing credentials and explicitly resumes the voyage. Stale host close events do not pause a newly authenticated TV session. No core game rules or original `SPECIFICATION.md` have changed.

@@ -45,10 +45,10 @@ function writeSnapshot(file,rooms,now=Date.now()){
     try{const dirFd=fs.openSync(dir,'r');try{fs.fsyncSync(dirFd);}finally{fs.closeSync(dirFd);}}catch{/* Some volumes do not support directory fsync. */}
   }catch(e){try{fs.unlinkSync(tmp);}catch{}throw e;}
 }
-function restoreSnapshot(file,now=Date.now()){
-  if(!file||!fs.existsSync(file))return new Map();
-  // A bad/mismatched snapshot stops boot instead of silently losing matches.
-  const doc=JSON.parse(fs.readFileSync(file,'utf8'));
+function restoreDocument(doc,now=Date.now()){
+  // Shared validation for local snapshots and user-supplied recovery files.
+  // Never modify the source backup object during restoration.
+  doc=structuredClone(doc);
   if(!doc||doc.schemaVersion!==VERSION||!Number.isFinite(doc.savedAt)||!Array.isArray(doc.rooms))throw Error('Unsupported or corrupt Tidewater snapshot. Original file has been preserved.');
   if(doc.rooms.length>1000)throw Error('Snapshot exceeds maximum room count.');
   const rooms=new Map();
@@ -77,4 +77,9 @@ function restoreSnapshot(file,now=Date.now()){
   }
   return rooms;
 }
-module.exports={writeSnapshot,restoreSnapshot,serialiseRoom,VERSION};
+function restoreSnapshot(file,now=Date.now()){
+  if(!file||!fs.existsSync(file))return new Map();
+  // A bad/mismatched snapshot stops boot instead of silently losing matches.
+  return restoreDocument(JSON.parse(fs.readFileSync(file,'utf8')),now);
+}
+module.exports={writeSnapshot,restoreSnapshot,restoreDocument,serialiseRoom,VERSION};
